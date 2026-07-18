@@ -1,197 +1,257 @@
 (() => {
   'use strict';
-  const STORAGE_KEY = 'hk-coffee-map-v1';
-  const STATUS_KEY = 'hk-coffee-status-v1';
+
+  const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
+  const ADMIN_KEY_STORAGE = 'hk-coffee-admin-key-v2';
   const DEFAULT_CENTER = [114.1588, 22.2857];
-  const REGION_BY_DISTRICT = {
-    '铜锣湾':'港岛','大坑':'港岛','中环':'港岛','石塘咀':'港岛','跑马地':'港岛','坚尼地城':'港岛','北角':'港岛','西营盘':'港岛','上环':'港岛','湾仔':'港岛',
-    '黄埔':'九龙','旺角':'九龙','太子':'九龙','深水埗':'九龙','大角咀':'九龙','土瓜湾':'九龙','尖沙咀':'九龙','大澳':'离岛'
-  };
-  let customShops = loadJson(STORAGE_KEY, []);
-  let statusMap = loadJson(STATUS_KEY, {});
-  let shops = hydrateShops();
-  let filtered = [...shops];
-  let activeRegion = '全部';
-  let activeDistrict = '全部';
-  let activeView = 'map';
-  let selectedId = null;
-  let markers = new Map();
-  let toastTimer;
 
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
+  let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
+  let map = null, toastTimer = null;
+  const markers = new Map();
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
   const els = {
-    search: $('#searchInput'), clearSearch: $('#clearSearch'), resultCount: $('#resultCount'), allCount: $('#allCount'),
-    list: $('#shopList'), detailSheet: $('#detailSheet'), districtSheet: $('#districtSheet'), districtList: $('#districtList'),
-    menuSheet: $('#menuSheet'), addDialog: $('#addDialog'), addForm: $('#addForm'), toast: $('#toast')
+    topbar: $('#topbar'), search: $('#searchInput'), clearSearch: $('#clearSearch'), allCount: $('#allCount'),
+    resultCount: $('#resultCount'), list: $('#shopList'), districtList: $('#districtList'), detailSheet: $('#detailSheet'),
+    districtSheet: $('#districtSheet'), menuSheet: $('#menuSheet'), addDialog: $('#addDialog'), addForm: $('#addForm'),
+    toast: $('#toast'), syncIndicator: $('#syncIndicator'), cloudDot: $('#cloudDot'), cloudState: $('#cloudState'),
+    cloudMeta: $('#cloudMeta'), adminKeyInput: $('#adminKeyInput'), parseButton: $('#parsePlaceButton'),
+    parseState: $('#parseState'), savePlaceButton: $('#savePlaceButton')
   };
 
-  let map = null;
-  if (!window.maplibregl) {
-    document.getElementById('map').innerHTML = '<div class="map-error"><strong>地图组件未能载入</strong><span>请检查网络连接后刷新；你仍可切换到列表并使用搜索、筛选和数据管理。</span></div>';
-  } else {
+  trackLayout();
+  initMap();
+  bindEvents();
+  renderAdminKeyState();
+  loadCloudShops({ fit: true });
+
+  function trackLayout() {
+    const update = () => {
+      const bottom = els.topbar?.getBoundingClientRect().bottom || 170;
+      document.documentElement.style.setProperty('--content-top', `${Math.ceil(bottom + 8)}px`);
+      map?.resize();
+    };
+    update();
+    window.addEventListener('resize', update, { passive: true });
+    window.visualViewport?.addEventListener('resize', update, { passive: true });
+    if ('ResizeObserver' in window && els.topbar) new ResizeObserver(update).observe(els.topbar);
+    document.fonts?.ready.then(update).catch(() => {});
+  }
+
+  function initMap() {
+    if (!window.maplibregl) {
+      $('#map').innerHTML = '<div class="map-error"><strong>地图未能载入</strong><span>请检查网络连接。</span></div>';
+      return;
+    }
     map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://tiles.openfreemap.org/styles/positron',
-      center: DEFAULT_CENTER,
-      zoom: 11.25,
-      minZoom: 9,
-      maxZoom: 19,
-      attributionControl: true
+      container: 'map', style: 'https://tiles.openfreemap.org/styles/positron', center: DEFAULT_CENTER,
+      zoom: 11.25, minZoom: 9, maxZoom: 19, attributionControl: false
     });
-    map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-right');
-    map.on('error', (event) => {
-      if (event?.error?.message) console.warn('Map error:', event.error.message);
-    });
-    map.on('load', () => {
-      renderMarkers();
-      fitTo(filtered, false);
-    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    map.on('load', () => { renderMarkers(); if (filtered.length) fitTo(filtered, false); });
   }
 
-  function hydrateShops(){
-    return [...window.COFFEE_SHOPS, ...customShops].map(s => ({...s, status: statusMap[s.id] || s.status || '想去'}));
+  async function loadCloudShops({ fit = false, quiet = false } = {}) {
+    setCloudState('syncing', '正在同步', '正在读取 Google Sheets');
+    if (!quiet) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
+    try {
+      const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
+      shops = payload.shops.map(normalizeShop).filter(s => s.active && s.id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+      setCloudState('online', '云端已同步', `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`);
+      renderDistricts();
+      applyFilters({ fit });
+    } catch (error) {
+      console.error(error);
+      setCloudState('error', '云端连接失败', '请检查网络后重试');
+      els.allCount.textContent = els.resultCount.textContent = '—';
+      els.list.innerHTML = '<div class="empty-state"><strong>无法读取云端数据</strong><br>请稍后重新同步。</div>';
+      showToast('云端数据读取失败');
+    }
   }
-  function loadJson(key, fallback){ try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
-  function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(customShops)); localStorage.setItem(STATUS_KEY, JSON.stringify(statusMap)); }
-  function normalize(v){ return String(v || '').trim().toLowerCase(); }
-  function deriveRegion(district){ return REGION_BY_DISTRICT[district] || '其他'; }
 
-  function renderMarkers(){
+  function normalizeShop(raw) {
+    return {
+      id: String(raw.id || ''), name: String(raw.name || ''), address: String(raw.address || ''),
+      region: String(raw.region || '待确认'), district: String(raw.district || '待确认'),
+      latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
+      appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''), status: String(raw.status || '想去'),
+      source: String(raw.source || ''), notes: String(raw.notes || ''), active: raw.active !== false
+    };
+  }
+
+  async function apiPost(action, data) {
+    const adminKey = ensureAdminKey();
+    if (!adminKey) throw new Error('已取消管理员操作');
+    const response = await fetch(API_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, adminKey, data }), redirect: 'follow'
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      const message = String(payload.error || '云端操作失败');
+      if (/unauthorized/i.test(message)) { localStorage.removeItem(ADMIN_KEY_STORAGE); renderAdminKeyState(); }
+      throw new Error(/unauthorized/i.test(message) ? '管理员密钥无效，已从本机清除' : message);
+    }
+    return payload;
+  }
+
+  function ensureAdminKey() {
+    let key = localStorage.getItem(ADMIN_KEY_STORAGE) || '';
+    if (!key) {
+      key = window.prompt('请输入 Apps Script 执行日志中的 ADMIN_KEY。密钥只保存在这台设备。')?.trim() || '';
+      if (key) { localStorage.setItem(ADMIN_KEY_STORAGE, key); renderAdminKeyState(); }
+    }
+    return key;
+  }
+
+  function renderMarkers() {
     if (!map) return;
     markers.forEach(marker => marker.remove()); markers.clear();
     filtered.forEach(shop => {
       const node = document.createElement('button');
-      node.type = 'button'; node.className = 'marker-hit';
-      node.title = shop.name; node.setAttribute('aria-label', shop.name);
-      node.innerHTML = `<span class="coffee-marker${shop.isCustom ? ' custom' : ''}${selectedId === shop.id ? ' selected' : ''}"></span>`;
-      node.addEventListener('click', (e) => { e.stopPropagation(); selectShop(shop.id, true); });
-      const marker = new maplibregl.Marker({element: node, anchor:'bottom'}).setLngLat([shop.lng, shop.lat]).addTo(map);
-      markers.set(shop.id, marker);
+      node.className = 'marker-hit'; node.type = 'button'; node.title = shop.name;
+      node.innerHTML = `<span class="coffee-marker${selectedId === shop.id ? ' selected' : ''}"></span>`;
+      node.addEventListener('click', e => { e.stopPropagation(); selectShop(shop.id, true); });
+      markers.set(shop.id, new maplibregl.Marker({ element: node, anchor: 'bottom' }).setLngLat([shop.longitude, shop.latitude]).addTo(map));
     });
   }
 
-  function renderList(){
-    els.resultCount.textContent = filtered.length;
-    els.allCount.textContent = shops.length;
-    if (!filtered.length){ els.list.innerHTML = '<div class="empty-state">没有符合当前条件的咖啡店</div>'; return; }
-    els.list.innerHTML = filtered.map(s => `
-      <button class="shop-card" data-shop-id="${escapeHtml(s.id)}">
-        <h3>${escapeHtml(s.name)}</h3>
-        <p><span class="area">${escapeHtml(s.district)}</span>${escapeHtml(s.address)}</p>
-      </button>`).join('');
-    els.list.querySelectorAll('[data-shop-id]').forEach(el => el.addEventListener('click', () => selectShop(el.dataset.shopId, true)));
+  function renderList() {
+    els.allCount.textContent = shops.length; els.resultCount.textContent = filtered.length;
+    if (!filtered.length) { els.list.innerHTML = '<div class="empty-state">没有符合当前条件的咖啡店</div>'; return; }
+    els.list.innerHTML = filtered.map(s => `<button class="shop-card" data-shop-id="${escapeHtml(s.id)}"><h3>${escapeHtml(s.name)}</h3><p><span class="area">${escapeHtml(s.district)}</span>${escapeHtml(s.address)}</p></button>`).join('');
+    els.list.querySelectorAll('[data-shop-id]').forEach(card => card.addEventListener('click', () => selectShop(card.dataset.shopId, true)));
   }
 
-  function applyFilters({fit=false}={}){
+  function applyFilters({ fit = false } = {}) {
     const q = normalize(els.search.value);
     filtered = shops.filter(s => {
       const regionOK = activeRegion === '全部' || s.region === activeRegion;
       const districtOK = activeDistrict === '全部' || s.district === activeDistrict;
-      const searchOK = !q || [s.name,s.address,s.district,s.region,s.notes,s.status].some(v => normalize(v).includes(q));
+      const searchOK = !q || [s.name, s.address, s.region, s.district, s.category, s.status, s.notes].some(v => normalize(v).includes(q));
       const savedOK = activeView !== 'saved' || s.status === '优先去';
       return regionOK && districtOK && searchOK && savedOK;
     });
     renderList(); if (map?.loaded()) renderMarkers(); if (fit) fitTo(filtered, true);
   }
 
-  function fitTo(items, animate=true){
+  function fitTo(items, animate = true) {
     if (!map || !items.length) return;
-    if (items.length === 1){ map.flyTo({center:[items[0].lng,items[0].lat],zoom:15.5,essential:true}); return; }
-    const bounds = new maplibregl.LngLatBounds(); items.forEach(s => bounds.extend([s.lng,s.lat]));
-    map.fitBounds(bounds,{padding:{top:190,bottom:130,left:35,right:35},maxZoom:14,duration:animate?700:0});
+    if (items.length === 1) return map.flyTo({ center: [items[0].longitude, items[0].latitude], zoom: 15.5, essential: true });
+    const bounds = new maplibregl.LngLatBounds(); items.forEach(s => bounds.extend([s.longitude, s.latitude]));
+    map.fitBounds(bounds, { padding: { top: Math.max(190, (els.topbar?.getBoundingClientRect().bottom || 170) + 20), bottom: 120, left: 35, right: 35 }, maxZoom: 14, duration: animate ? 700 : 0 });
   }
 
-  function selectShop(id, moveMap){
+  function selectShop(id, moveMap) {
     const shop = shops.find(s => s.id === id); if (!shop) return;
     selectedId = id;
-    if (moveMap && map) map.flyTo({center:[shop.lng,shop.lat],zoom:15.6,offset:[0,-90],essential:true});
-    markers.forEach((m,key) => m.getElement().querySelector('.coffee-marker')?.classList.toggle('selected', key === id));
+    if (moveMap && map) map.flyTo({ center: [shop.longitude, shop.latitude], zoom: 15.6, offset: [0, -90], essential: true });
+    markers.forEach((m, key) => m.getElement().querySelector('.coffee-marker')?.classList.toggle('selected', key === id));
     $('#detailRegion').textContent = shop.region; $('#detailDistrict').textContent = shop.district;
     $('#detailName').textContent = shop.name; $('#detailAddress').textContent = shop.address;
-    const notes = $('#detailNotes'); notes.textContent = shop.notes || ''; notes.classList.toggle('visible', !!shop.notes);
+    $('#detailNotes').textContent = shop.notes || ''; $('#detailNotes').classList.toggle('visible', Boolean(shop.notes));
     $('#googleMapsButton').href = shop.googleMaps || googleSearchUrl(shop);
-    $('#appleMapsButton').href = shop.appleMaps || `https://maps.apple.com/?q=${encodeURIComponent(shop.name)}&ll=${shop.lat},${shop.lng}`;
+    $('#appleMapsButton').href = shop.appleMaps || `https://maps.apple.com/?q=${encodeURIComponent(shop.name)}&ll=${shop.latitude},${shop.longitude}`;
     $$('.status-button').forEach(b => b.classList.toggle('active', b.dataset.status === shop.status));
     openSheet(els.detailSheet);
   }
 
-  function openSheet(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
-  function closeSheet(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
-  function googleSearchUrl(s){ return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${s.name} ${s.address}`)}`; }
-  function escapeHtml(v){ return String(v ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-  function showToast(text){ clearTimeout(toastTimer); els.toast.textContent=text; els.toast.classList.add('show'); toastTimer=setTimeout(()=>els.toast.classList.remove('show'),2200); }
-
-  function renderDistricts(){
-    const counts = shops.reduce((acc,s)=>(acc[s.district]=(acc[s.district]||0)+1,acc),{});
-    const districts = Object.keys(counts).sort((a,b)=>a.localeCompare(b,'zh-Hans'));
-    els.districtList.innerHTML = `<button class="district-option ${activeDistrict==='全部'?'active':''}" data-district="全部">全部地区</button>` + districts.map(d => `<button class="district-option ${activeDistrict===d?'active':''}" data-district="${escapeHtml(d)}">${escapeHtml(d)} · ${counts[d]}</button>`).join('');
-    els.districtList.querySelectorAll('[data-district]').forEach(b => b.addEventListener('click',()=>{
-      activeDistrict=b.dataset.district; $('#districtButton').classList.toggle('active',activeDistrict!=='全部'); $('#districtButton').firstChild.textContent=activeDistrict==='全部'?'具体地区 ':activeDistrict+' ';
-      closeSheet(els.districtSheet); applyFilters({fit:true}); renderDistricts();
+  function renderDistricts() {
+    const counts = shops.reduce((a, s) => (a[s.district] = (a[s.district] || 0) + 1, a), {});
+    const districts = Object.keys(counts).sort((a, b) => a.localeCompare(b, 'zh-Hans'));
+    els.districtList.innerHTML = `<button class="district-option ${activeDistrict === '全部' ? 'active' : ''}" data-district="全部">全部地区</button>` + districts.map(d => `<button class="district-option ${activeDistrict === d ? 'active' : ''}" data-district="${escapeHtml(d)}">${escapeHtml(d)} · ${counts[d]}</button>`).join('');
+    els.districtList.querySelectorAll('[data-district]').forEach(b => b.addEventListener('click', () => {
+      activeDistrict = b.dataset.district;
+      $('#districtButton').classList.toggle('active', activeDistrict !== '全部');
+      $('#districtButton').firstChild.textContent = activeDistrict === '全部' ? '具体地区 ' : `${activeDistrict} `;
+      closeSheet(els.districtSheet); applyFilters({ fit: true }); renderDistricts();
     }));
   }
 
-  $('#regionFilters').addEventListener('click', e => {
-    const b=e.target.closest('[data-region]'); if(!b)return;
-    activeRegion=b.dataset.region; $$('#regionFilters [data-region]').forEach(x=>x.classList.toggle('active',x===b));
-    applyFilters({fit:true});
-  });
-  $('#districtButton').addEventListener('click',()=>{renderDistricts();openSheet(els.districtSheet)});
-  els.search.addEventListener('input',()=>{els.clearSearch.classList.toggle('visible',!!els.search.value);applyFilters()});
-  els.clearSearch.addEventListener('click',()=>{els.search.value='';els.clearSearch.classList.remove('visible');applyFilters({fit:true});els.search.focus()});
-  $('#fitButton').addEventListener('click',()=>fitTo(filtered,true));
+  function bindEvents() {
+    $('#regionFilters').addEventListener('click', e => {
+      const b = e.target.closest('[data-region]'); if (!b) return;
+      activeRegion = b.dataset.region; $$('#regionFilters [data-region]').forEach(x => x.classList.toggle('active', x === b)); applyFilters({ fit: true });
+    });
+    $('#districtButton').addEventListener('click', () => { renderDistricts(); openSheet(els.districtSheet); });
+    els.search.addEventListener('input', () => { els.clearSearch.classList.toggle('visible', Boolean(els.search.value)); applyFilters(); });
+    els.clearSearch.addEventListener('click', () => { els.search.value = ''; els.clearSearch.classList.remove('visible'); applyFilters({ fit: true }); });
+    $('#fitButton').addEventListener('click', () => fitTo(filtered, true));
+    $$('.nav-item').forEach(b => b.addEventListener('click', () => {
+      activeView = b.dataset.view; $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
+      document.body.classList.toggle('list-view', activeView === 'list'); document.body.classList.toggle('saved-view', activeView === 'saved');
+      applyFilters(); setTimeout(() => map?.resize(), 80);
+    }));
+    $('#locateButton').addEventListener('click', () => navigator.geolocation?.getCurrentPosition(p => map?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14.5 }), () => showToast('无法取得当前位置'), { enableHighAccuracy: true, timeout: 8000 }));
+    $('#addButton').addEventListener('click', () => { resetAddForm(); els.addDialog.showModal(); });
+    $('#closeAddDialog').addEventListener('click', () => els.addDialog.close());
+    els.parseButton.addEventListener('click', parseGoogleMapsLink);
+    els.addForm.elements.google_maps.addEventListener('input', () => { els.parseState.textContent = '链接已更改，请重新解析'; els.parseState.className = ''; });
+    els.addForm.addEventListener('submit', saveNewShop);
+    $('#useMapCenter').addEventListener('click', () => { if (!map) return; const c = map.getCenter(); els.addForm.elements.latitude.value = c.lat.toFixed(7); els.addForm.elements.longitude.value = c.lng.toFixed(7); });
+    $$('.status-button').forEach(b => b.addEventListener('click', () => updateStatus(b.dataset.status)));
+    $('#menuButton').addEventListener('click', () => { renderAdminKeyState(); openSheet(els.menuSheet); });
+    $$('[data-close-sheet]').forEach(x => x.addEventListener('click', () => closeSheet(els.detailSheet)));
+    $$('[data-close-district]').forEach(x => x.addEventListener('click', () => closeSheet(els.districtSheet)));
+    $$('[data-close-menu]').forEach(x => x.addEventListener('click', () => closeSheet(els.menuSheet)));
+    $('#saveAdminKeyButton').addEventListener('click', () => { const v = els.adminKeyInput.value.trim(); if (!v) return showToast('请输入管理员密钥'); localStorage.setItem(ADMIN_KEY_STORAGE, v); renderAdminKeyState(); showToast('密钥已保存在本机'); });
+    $('#clearAdminKeyButton').addEventListener('click', () => { localStorage.removeItem(ADMIN_KEY_STORAGE); renderAdminKeyState(); showToast('本机密钥已清除'); });
+    $('#refreshButton').addEventListener('click', async () => { await loadCloudShops({ quiet: true }); closeSheet(els.menuSheet); });
+    $('#exportJsonButton').addEventListener('click', () => download('hong-kong-coffee-shops.json', JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), shops }, null, 2), 'application/json'));
+    $('#exportCsvButton').addEventListener('click', exportCsv);
+  }
 
-  $$('.nav-item').forEach(b=>b.addEventListener('click',()=>{
-    activeView=b.dataset.view; $$('.nav-item').forEach(x=>x.classList.toggle('active',x===b));
-    document.body.classList.toggle('list-view',activeView==='list'); document.body.classList.toggle('saved-view',activeView==='saved');
-    applyFilters(); if (map) setTimeout(()=>map.resize(),60);
-  }));
+  async function parseGoogleMapsLink() {
+    const url = els.addForm.elements.google_maps.value.trim(); if (!url) return showToast('请先粘贴 Google Maps 链接');
+    els.parseButton.disabled = true; els.parseButton.textContent = '解析中…'; els.parseState.textContent = '正在解析地点…';
+    try {
+      const { place } = await apiPost('parse', { google_maps: url });
+      ['google_maps','name','address','region','district','latitude','longitude','apple_maps','category','status','source','notes'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
+      els.parseState.textContent = '解析完成，请确认并按需修改'; els.parseState.className = 'success';
+    } catch (error) { els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message); }
+    finally { els.parseButton.disabled = false; els.parseButton.textContent = '解析地点'; }
+  }
 
-  $('#locateButton').addEventListener('click',()=>{
-    if(!map){showToast('地图尚未载入');return}
-    if(!navigator.geolocation){showToast('当前浏览器不支持定位');return}
-    navigator.geolocation.getCurrentPosition(p=>map.flyTo({center:[p.coords.longitude,p.coords.latitude],zoom:14.5,essential:true}),()=>showToast('无法取得当前位置'),{enableHighAccuracy:true,timeout:8000});
-  });
-  $('#addButton').addEventListener('click',()=>els.addDialog.showModal());
-  $('#closeAddDialog').addEventListener('click',()=>els.addDialog.close());
-  $('#useMapCenter').addEventListener('click',()=>{if(!map){showToast('地图尚未载入');return}const c=map.getCenter();els.addForm.elements.lat.value=c.lat.toFixed(7);els.addForm.elements.lng.value=c.lng.toFixed(7);showToast('已填入地图中心坐标')});
+  async function saveNewShop(event) {
+    event.preventDefault(); const fd = new FormData(els.addForm);
+    const data = Object.fromEntries([...fd.entries()].map(([k,v]) => [k, String(v).trim()]));
+    data.latitude = Number(data.latitude); data.longitude = Number(data.longitude); data.active = true;
+    if (!data.google_maps || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
+    els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
+    try {
+      const { shop } = await apiPost('add', data); const added = normalizeShop(shop); shops.push(added);
+      renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端地图');
+    } catch (error) { showToast(error.message); }
+    finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端地图'; }
+  }
 
-  els.addForm.addEventListener('submit',e=>{
-    e.preventDefault(); const fd=new FormData(els.addForm); const name=String(fd.get('name')).trim(); const district=String(fd.get('district')).trim();
-    const lat=Number(fd.get('lat')),lng=Number(fd.get('lng')); if(!name||!district||!Number.isFinite(lat)||!Number.isFinite(lng)){showToast('请填写完整信息');return}
-    const shop={id:`custom-${Date.now()}`,name,district,region:deriveRegion(district),address:String(fd.get('address')).trim(),lat,lng,googleMaps:String(fd.get('googleMaps')).trim(),appleMaps:'',status:'想去',source:'手动添加',notes:String(fd.get('notes')).trim(),isCustom:true};
-    if(!shop.googleMaps) shop.googleMaps=googleSearchUrl(shop);
-    customShops.push(shop); persist(); shops=hydrateShops(); els.addForm.reset(); els.addDialog.close(); renderDistricts(); applyFilters(); selectShop(shop.id,true); showToast('已添加到收藏地图');
-  });
+  async function updateStatus(status) {
+    if (!selectedId) return;
+    try {
+      const { shop } = await apiPost('setStatus', { id: selectedId, status }); const updated = normalizeShop(shop);
+      const i = shops.findIndex(s => s.id === selectedId); if (i >= 0) shops[i] = updated;
+      applyFilters(); selectShop(selectedId, false); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast(`已标记为“${status}”`);
+    } catch (error) { showToast(error.message); }
+  }
 
-  $$('.status-button').forEach(b=>b.addEventListener('click',()=>{
-    if(!selectedId)return; statusMap[selectedId]=b.dataset.status; persist(); shops=hydrateShops(); applyFilters(); selectShop(selectedId,false); showToast(`已标记为“${b.dataset.status}”`);
-  }));
+  function renderAdminKeyState() {
+    const has = Boolean(localStorage.getItem(ADMIN_KEY_STORAGE)); els.adminKeyInput.value = ''; els.adminKeyInput.placeholder = has ? '已保存在本机' : '未设置'; $('#clearAdminKeyButton').disabled = !has;
+  }
+  function resetAddForm() { els.addForm.reset(); els.addForm.elements.status.value = '想去'; els.parseState.textContent = '粘贴具体商户链接后解析'; els.parseState.className = ''; }
+  function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
+  function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
+  function exportCsv() { const h = ['Name','District','Region','Address','Latitude','Longitude','Status','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.district,s.region,s.address,s.latitude,s.longitude,s.status,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('hong-kong-coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
+  function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
+  function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+  function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
+  function closeSheet(el) { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+  function googleSearchUrl(s) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${s.name} ${s.address}`)}`; }
+  function normalize(v) { return String(v || '').trim().toLowerCase(); }
+  function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  $('#menuButton').addEventListener('click',()=>openSheet(els.menuSheet));
-  $$('[data-close-sheet]').forEach(x=>x.addEventListener('click',()=>closeSheet(els.detailSheet)));
-  $$('[data-close-district]').forEach(x=>x.addEventListener('click',()=>closeSheet(els.districtSheet)));
-  $$('[data-close-menu]').forEach(x=>x.addEventListener('click',()=>closeSheet(els.menuSheet)));
-
-  $('#exportJsonButton').addEventListener('click',()=>download('香港咖啡地图-备份.json',JSON.stringify({version:1,exportedAt:new Date().toISOString(),customShops,statusMap},null,2),'application/json'));
-  $('#exportCsvButton').addEventListener('click',()=>{
-    const headers=['Name','District','Region','Address','Latitude','Longitude','Status','Google Maps','Apple Maps','Notes'];
-    const lines=[headers,...shops.map(s=>[s.name,s.district,s.region,s.address,s.lat,s.lng,s.status,s.googleMaps,s.appleMaps,s.notes])].map(row=>row.map(csvCell).join(','));
-    download('香港咖啡地图.csv','\ufeff'+lines.join('\n'),'text/csv;charset=utf-8');
-  });
-  function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}
-  function download(name,content,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);showToast('文件已导出')}
-
-  $('#importInput').addEventListener('change',async e=>{
-    const f=e.target.files[0]; if(!f)return;
-    try{const data=JSON.parse(await f.text()); if(!Array.isArray(data.customShops)||typeof data.statusMap!=='object')throw new Error(); customShops=data.customShops;statusMap=data.statusMap;persist();shops=hydrateShops();renderDistricts();applyFilters({fit:true});closeSheet(els.menuSheet);showToast('备份已导入')}catch{showToast('无法识别此备份文件')} e.target.value='';
-  });
-  $('#resetButton').addEventListener('click',()=>{
-    if(!confirm('确定清除本机新增的咖啡店和所有状态吗？初始 36 家仍会保留。'))return;
-    customShops=[];statusMap={};persist();shops=hydrateShops();activeDistrict='全部';renderDistricts();applyFilters({fit:true});closeSheet(els.menuSheet);showToast('本机新增数据已清除');
-  });
-
-  if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  renderDistricts(); renderList();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();
