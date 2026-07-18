@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#f4f1ea" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="香港咖啡地图" />
+  <title>香港咖啡地图</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://tiles.openfreemap.org" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand-row">
+        <div>
+          <p class="eyebrow">Personal Collection</p>
+          <h1>香港咖啡地图</h1>
+        </div>
+        <button id="menuButton" class="icon-button" aria-label="数据与设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        </button>
+      </div>
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.7"/><path d="m16 16 4 4"/></svg>
+        <input id="searchInput" type="search" placeholder="搜索店名、地址或地区" autocomplete="off" />
+        <button id="clearSearch" class="clear-search" aria-label="清除搜索">×</button>
+      </div>
+      <div class="filter-row" id="regionFilters" aria-label="地区筛选">
+        <button class="chip active" data-region="全部">全部 <span id="allCount">36</span></button>
+        <button class="chip" data-region="港岛">港岛</button>
+        <button class="chip" data-region="九龙">九龙</button>
+        <button class="chip" data-region="离岛">离岛</button>
+        <button class="chip district-chip" id="districtButton">具体地区 <span>⌄</span></button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section id="map" aria-label="咖啡店地图"></section>
+
+      <aside id="listPanel" class="list-panel">
+        <div class="list-handle"></div>
+        <div class="list-head">
+          <div>
+            <p class="list-kicker">当前结果</p>
+            <h2><span id="resultCount">36</span> 家咖啡店</h2>
+          </div>
+          <button id="fitButton" class="text-button">显示全部</button>
+        </div>
+        <div id="shopList" class="shop-list"></div>
+      </aside>
+
+      <button id="locateButton" class="map-fab locate-fab" aria-label="定位到当前位置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      </button>
+      <button id="addButton" class="map-fab add-fab" aria-label="添加咖啡店">+</button>
+    </main>
+
+    <nav class="bottom-nav" aria-label="视图切换">
+      <button class="nav-item active" data-view="map">
+        <svg viewBox="0 0 24 24"><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2Z"/><path d="M8 4v13M16 7v13"/></svg><span>地图</span>
+      </button>
+      <button class="nav-item" data-view="list">
+        <svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>列表</span>
+      </button>
+      <button class="nav-item" data-view="saved">
+        <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg><span>收藏</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="detailSheet" class="sheet detail-sheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close-sheet></div>
+    <article class="sheet-card">
+      <div class="sheet-grabber"></div>
+      <button class="sheet-close" data-close-sheet aria-label="关闭">×</button>
+      <div class="detail-meta"><span id="detailRegion"></span><span id="detailDistrict"></span></div>
+      <h2 id="detailName"></h2>
+      <p id="detailAddress" class="detail-address"></p>
+      <div id="detailNotes" class="detail-notes"></div>
+      <div class="detail-actions">
+        <a id="googleMapsButton" class="primary-action" target="_blank" rel="noopener">Google Maps</a>
+        <a id="appleMapsButton" class="secondary-action" target="_blank" rel="noopener" aria-label="Apple Maps">Apple Maps</a>
+      </div>
+      <div class="status-row">
+        <button class="status-button" data-status="想去">想去</button>
+        <button class="status-button" data-status="优先去">优先去</button>
+        <button class="status-button" data-status="去过">去过</button>
+      </div>
+    </article>
+  </div>
+
+  <div id="districtSheet" class="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close-district></div>
+    <article class="sheet-card compact-card">
+      <div class="sheet-grabber"></div>
+      <div class="sheet-title-row"><h2>选择具体地区</h2><button class="sheet-close" data-close-district>×</button></div>
+      <div id="districtList" class="district-grid"></div>
+    </article>
+  </div>
+
+  <div id="menuSheet" class="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" data-close-menu></div>
+    <article class="sheet-card compact-card">
+      <div class="sheet-grabber"></div>
+      <div class="sheet-title-row"><div><p class="list-kicker">Data</p><h2>数据与设置</h2></div><button class="sheet-close" data-close-menu>×</button></div>
+      <div class="menu-list">
+        <button id="exportJsonButton" class="menu-row"><span>导出 JSON 备份</span><b>→</b></button>
+        <button id="exportCsvButton" class="menu-row"><span>导出 CSV</span><b>→</b></button>
+        <label class="menu-row file-row"><span>导入 JSON 备份</span><b>＋</b><input id="importInput" type="file" accept="application/json,.json" /></label>
+        <button id="resetButton" class="menu-row danger-row"><span>清除本机新增数据</span><b>×</b></button>
+      </div>
+      <p class="menu-note">初始 36 家店铺不会被删除；你新增的店铺和状态会保存在当前浏览器。</p>
+    </article>
+  </div>
+
+  <dialog id="addDialog" class="add-dialog">
+    <form id="addForm" method="dialog">
+      <div class="dialog-head"><div><p class="list-kicker">New Place</p><h2>添加咖啡店</h2></div><button type="button" id="closeAddDialog" class="sheet-close">×</button></div>
+      <div class="form-grid">
+        <label><span>店铺名称 *</span><input name="name" required placeholder="例如：Halfway Coffee" /></label>
+        <label><span>地区 *</span><input name="district" required placeholder="例如：上环" /></label>
+        <label class="full"><span>地址 *</span><input name="address" required placeholder="街道、商场及铺位" /></label>
+        <label class="full"><span>Google Maps 链接</span><input name="googleMaps" type="url" placeholder="https://maps.google.com/…" /></label>
+        <label><span>纬度 *</span><input name="lat" type="number" step="any" required placeholder="22.28" /></label>
+        <label><span>经度 *</span><input name="lng" type="number" step="any" required placeholder="114.16" /></label>
+        <label class="full"><span>备注</span><textarea name="notes" rows="3" placeholder="来源、推荐饮品、营业提醒……"></textarea></label>
+      </div>
+      <button type="button" id="useMapCenter" class="center-button">使用当前地图中心坐标</button>
+      <button type="submit" class="primary-action dialog-submit">保存到地图</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
