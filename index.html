@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://tiles.openfreemap.org" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
 </head>
 <body>
   <div id="app">
@@ -50,19 +51,14 @@
 
     <main class="workspace">
       <section id="map" aria-label="咖啡店地图"></section>
-
       <aside id="listPanel" class="list-panel">
         <div class="list-handle"></div>
         <div class="list-head">
-          <div>
-            <p class="list-kicker">当前结果</p>
-            <h2><span id="resultCount">—</span> 家咖啡店</h2>
-          </div>
+          <div><p class="list-kicker">当前结果</p><h2><span id="resultCount">—</span> 家咖啡店</h2></div>
           <button id="fitButton" class="text-button">显示全部</button>
         </div>
         <div id="shopList" class="shop-list"><div class="empty-state">正在从云端加载…</div></div>
       </aside>
-
       <button id="locateButton" class="map-fab locate-fab" aria-label="定位到当前位置">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
       </button>
@@ -70,15 +66,9 @@
     </main>
 
     <nav class="bottom-nav" aria-label="视图切换">
-      <button class="nav-item active" data-view="map">
-        <svg viewBox="0 0 24 24"><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2Z"/><path d="M8 4v13M16 7v13"/></svg><span>地图</span>
-      </button>
-      <button class="nav-item" data-view="list">
-        <svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>列表</span>
-      </button>
-      <button class="nav-item" data-view="saved">
-        <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg><span>收藏</span>
-      </button>
+      <button class="nav-item active" data-view="map"><svg viewBox="0 0 24 24"><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2Z"/><path d="M8 4v13M16 7v13"/></svg><span>地图</span></button>
+      <button class="nav-item" data-view="list"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>列表</span></button>
+      <button class="nav-item" data-view="saved"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg><span>收藏</span></button>
     </nav>
   </div>
 
@@ -92,8 +82,10 @@
       <p id="detailAddress" class="detail-address"></p>
       <div id="detailNotes" class="detail-notes"></div>
       <div class="detail-actions">
-        <a id="googleMapsButton" class="primary-action" target="_blank" rel="noopener">Google Maps</a>
-        <a id="appleMapsButton" class="secondary-action" target="_blank" rel="noopener">Apple Maps</a>
+        <a id="googleMapsButton" class="primary-action map-link-action" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"/><circle cx="12" cy="10" r="2.2"/></svg>
+          <span>Google Maps</span>
+        </a>
       </div>
       <div class="status-row" id="statusRow">
         <button class="status-button" data-status="想去">想去</button>
@@ -117,18 +109,12 @@
     <article class="sheet-card compact-card">
       <div class="sheet-grabber"></div>
       <div class="sheet-title-row"><div><p class="list-kicker">Cloud Data</p><h2>数据与设置</h2></div><button class="sheet-close" data-close-menu>×</button></div>
-      <div class="cloud-summary">
-        <span id="cloudDot" class="cloud-dot syncing"></span>
-        <div><strong id="cloudState">正在同步</strong><p id="cloudMeta">连接 Google Sheets 云端数据库</p></div>
-      </div>
+      <div class="cloud-summary"><span id="cloudDot" class="cloud-dot syncing"></span><div><strong id="cloudState">正在同步</strong><p id="cloudMeta">连接 Google Sheets 云端数据库</p></div></div>
       <div class="admin-card">
         <label for="adminKeyInput">管理员密钥</label>
-        <div class="admin-key-row">
-          <input id="adminKeyInput" type="password" autocomplete="off" placeholder="未设置" />
-          <button id="saveAdminKeyButton" type="button">保存</button>
-        </div>
+        <div class="admin-key-row"><input id="adminKeyInput" type="password" autocomplete="off" placeholder="未设置" /><button id="saveAdminKeyButton" type="button">保存</button></div>
         <button id="clearAdminKeyButton" class="inline-danger" type="button">清除本机密钥</button>
-        <p>密钥仅保存在这台设备，用于新增地点和修改状态。</p>
+        <p>密钥仅保存在这台设备。设置后可新增、编辑、删除地点和修改收藏状态。</p>
       </div>
       <div class="menu-list">
         <button id="refreshButton" class="menu-row"><span>重新同步云端数据</span><b>↻</b></button>
@@ -141,7 +127,7 @@
 
   <dialog id="addDialog" class="add-dialog">
     <form id="addForm" method="dialog">
-      <div class="dialog-head"><div><p class="list-kicker">New Place</p><h2>添加咖啡店</h2></div><button type="button" id="closeAddDialog" class="sheet-close">×</button></div>
+      <div class="dialog-head"><div><p id="dialogKicker" class="list-kicker">New Place</p><h2 id="dialogTitle">添加咖啡店</h2></div><button type="button" id="closeAddDialog" class="sheet-close">×</button></div>
       <div class="form-grid">
         <label class="full primary-input"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required placeholder="https://maps.app.goo.gl/…" /></label>
         <div class="full parse-row"><button type="button" id="parsePlaceButton" class="parse-button">解析地点</button><span id="parseState">粘贴具体商户链接后解析</span></div>
@@ -152,7 +138,6 @@
         <label class="full"><span>地址 *</span><input name="address" required /></label>
         <label><span>纬度 *</span><input name="latitude" type="number" step="any" required /></label>
         <label><span>经度 *</span><input name="longitude" type="number" step="any" required /></label>
-        <label class="full"><span>Apple Maps 链接</span><input name="apple_maps" type="url" /></label>
         <label><span>类型</span><input name="category" placeholder="例如：手冲、烘焙" /></label>
         <label><span>来源链接</span><input name="source" type="url" placeholder="Instagram / 小红书等" /></label>
         <label class="full"><span>备注</span><textarea name="notes" rows="3" placeholder="推荐饮品、营业提醒……"></textarea></label>
@@ -165,5 +150,6 @@
   <div id="toast" class="toast" role="status"></div>
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
   <script src="app.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>
