@@ -20,7 +20,7 @@ jobs:
           node-version: '20'
       - run: npm install playwright@1.54.1
       - run: npx playwright install --with-deps chromium
-      - run: node scripts/extract_google_maps_list.js '${{ vars.TOKYO_COFFEE_LIST_URL }}'
+      - run: node scripts/extract_google_maps_list.js 'https://www.google.com/maps/@35.6715213,139.6880868,13.06z/data=!4m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3?authuser=0&hl=en&entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D'
       - name: Save extracted list
         run: |
           git config user.name github-actions[bot]
