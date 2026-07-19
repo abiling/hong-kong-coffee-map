@@ -1,0 +1,30 @@
+name: Extract Tokyo Coffee List
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/extract_google_maps_list.js
+      - .github/workflows/extract-tokyo-list.yml
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install playwright@1.54.1
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/extract_google_maps_list.js '${{ vars.TOKYO_COFFEE_LIST_URL }}'
+      - name: Save extracted list
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tmp/tokyo-coffee-list.json
+          git commit -m 'Extract Tokyo coffee list' || exit 0
+          git push
