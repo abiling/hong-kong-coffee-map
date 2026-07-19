@@ -1,1 +1,27 @@
-.city-title-button{display:inline-flex;align-items:center;gap:9px;margin:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:clamp(32px,8.5vw,46px);font-weight:600;line-height:.98;letter-spacing:-.045em;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}.city-title-button:focus-visible{outline:2px solid currentColor;outline-offset:5px;border-radius:4px}.city-chevron{display:inline-block;margin
+.city-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: clamp(32px, 8.5vw, 46px);
+  font-weight: 600;
+  line-height: .98;
+  letter-spacing: -.045em;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.city-title-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+
+/* Same CSS-drawn chevron language as the Specific Area filter. */
+.city-chevron {
