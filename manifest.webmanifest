@@ -1,7 +1,7 @@
 {
-  "name": "Hong Kong Coffee Shops",
-  "short_name": "Hong Kong",
-  "description": "A personal cloud-synced map of Hong Kong coffee shops.",
+  "name": "Coffee Shops Map",
+  "short_name": "Coffee Shops",
+  "description": "A personal cloud-synced map of coffee shops across multiple cities.",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
