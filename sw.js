@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v4-20260719b';
+const CACHE = 'coffee-map-v4-20260719c';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css', './filter-scroll.css', './compact-nav.css', './multicity.css', './map-config.js', './multicity.js', './compact-search.js', './app.js', './admin-core.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
