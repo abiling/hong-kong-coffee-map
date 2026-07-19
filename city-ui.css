@@ -1,0 +1,3 @@
+/* City selector UI — loaded last to override legacy styles */
+.city-title-button{display:inline-flex!important;align-items:center!important;gap:10px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;color:inherit!important;font:inherit!important;font-size:clamp(32px,8.5vw,46px)!important;font-weight:600!important;line-height:1!important;letter-spacing:-.045em!important;text-align:left!important;-webkit-tap-highlight-color:transparent}
+.city-title-button>[data-city-label
