@@ -4,8 +4,6 @@
   [
     './filter-scroll.css',
     './compact-nav.css',
-    './city-title-base.css',
-    './city-title-arrow.css',
     './city-list-fix.css'
   ].forEach(href => {
     const link = document.createElement('link');
@@ -25,7 +23,9 @@
   }
 
   if (!document.querySelector('script[data-multicity]')) {
-    document.write('<script src="./multicity.js" data-multicity="true"><\/script>');
+    const openTag = '<scr' + 'ipt src="./multicity.js" data-multicity="true">';
+    const closeTag = '</scr' + 'ipt>';
+    document.write(openTag + closeTag);
   }
 
   window.addEventListener('load', () => {
