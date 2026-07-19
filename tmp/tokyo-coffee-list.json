@@ -1,21 +1,461 @@
 {
   "source": "https://www.google.com/maps/@35.6715213,139.6880868,13.06z/data=!4m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3?authuser=0&hl=en&entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
-  "finalUrl": "https://www.google.com/maps/@35.6853364,139.6907573,13z/data=!4m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3?authuser=0&hl=en&entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
   "title": "Tokyo Cafe - Google Maps",
-  "bodyText": "\nSearch Google Maps\n\n\n\n\nSaved\n\nRecents\n\nGet app\nTokyo Cafe\nKobayashi Chin · 23 places · Shared list\n\n\nSave\n\nShare\nLawn\n4.1\nCoffee shop\nREFRESH STAND\n4.9\nCafe\nLittle Darling Coffee Roasters\n4.3\nCafe\nLIWEI COFFEE\n4.6\nCafe\nAllpress Espresso Tokyo Roastery & Cafe\n4.2\nCoffee shop\nAlchemist Aoyama\n4.5\nCoffee shop\nLAMBERT\n4.0\nCoffee shop\nWOODBERRY BAKERY\n4.3\nBakery\nBole COFFEE & ICE CREAM\n4.5\nIce cream shop\nSANU NOWHERE\n4.5\nBar\nFriend in Hand\n3.9\nCoffee store\nBARK BAKE & ROAST\n3.9\nCafe\nHiguma Doughnuts × Coffee Wrights Omotesando\n4.2\nCoffee shop\nnadoya no katte\n4.2\nCoffee shop\ndotcom coffee Asakusabashi\n4.6\nCoffee shop\nARC\n3.9\nCoffee shop\nOgawa Coffee Laboratory Shimokitazawa\n4.3\nCoffee shop\nEt -THE CULTURAL COFFEEHOUSE-\n4.4\nCafe\nTERON COFFEE & BAR\n4.3\nCoffee shop\nTOGO SHIMOKITAZAWA\n4.3\nCafe\n\nSign in\n\n\n\n Layers\nMap data ©2026 United StatesTermsPrivacySend Product Feedback\n\t1 mi ",
-  "linkCount": 2,
-  "links": [
+  "declaredCount": 24,
+  "count": 24,
+  "places": [
     {
-      "href": "https://www.google.com/intl/en/about/products?tab=lh",
-      "label": "Google apps",
-      "text": ""
+      "name": "SUNDAE APART",
+      "rating": "4.6",
+      "category": "Coffee shop"
     },
     {
-      "href": "https://accounts.google.com/ServiceLogin?hl=en&passive=true&continue=https%3A%2F%2Fwww.google.com%2Fmaps%2F%4035.6853364%2C139.6907573%2C13z%2Fdata%3D!4m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3%3Fauthuser%3D0%26hl%3Den%26ved%3D1t%253A314688&service=local&ec=GAZAcQ",
-      "label": "Sign in",
-      "text": "Sign in"
+      "name": "Lawn",
+      "rating": "4.1",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "REFRESH STAND",
+      "rating": "4.9",
+      "category": "Cafe"
+    },
+    {
+      "name": "Little Darling Coffee Roasters",
+      "rating": "4.3",
+      "category": "Cafe"
+    },
+    {
+      "name": "LIWEI COFFEE",
+      "rating": "4.6",
+      "category": "Cafe"
+    },
+    {
+      "name": "Allpress Espresso Tokyo Roastery & Cafe",
+      "rating": "4.2",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "Alchemist Aoyama",
+      "rating": "4.5",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "LAMBERT",
+      "rating": "4.0",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "WOODBERRY BAKERY",
+      "rating": "4.3",
+      "category": "Bakery"
+    },
+    {
+      "name": "Bole COFFEE & ICE CREAM",
+      "rating": "4.5",
+      "category": "Ice cream shop"
+    },
+    {
+      "name": "SANU NOWHERE",
+      "rating": "4.5",
+      "category": "Bar"
+    },
+    {
+      "name": "Friend in Hand",
+      "rating": "3.9",
+      "category": "Coffee store"
+    },
+    {
+      "name": "BARK BAKE & ROAST",
+      "rating": "3.9",
+      "category": "Cafe"
+    },
+    {
+      "name": "Higuma Doughnuts × Coffee Wrights Omotesando",
+      "rating": "4.2",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "nadoya no katte",
+      "rating": "4.2",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "dotcom coffee Asakusabashi",
+      "rating": "4.6",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "ARC",
+      "rating": "3.9",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "Ogawa Coffee Laboratory Shimokitazawa",
+      "rating": "4.3",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "Et -THE CULTURAL COFFEEHOUSE-",
+      "rating": "4.4",
+      "category": "Cafe"
+    },
+    {
+      "name": "TERON COFFEE & BAR",
+      "rating": "4.3",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "TOGO SHIMOKITAZAWA",
+      "rating": "4.3",
+      "category": "Cafe"
+    },
+    {
+      "name": "Glitch Coffee and Roasters GINZA",
+      "rating": "4.3",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "COFFEE COUNTY Tokyo",
+      "rating": "4.6",
+      "category": "Coffee shop"
+    },
+    {
+      "name": "Pharos Coffee Jimbocho",
+      "rating": "4.5",
+      "category": "Coffee shop"
     }
   ],
-  "count": 0,
-  "places": []
+  "controls": [
+    {
+      "label": "Back",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Search",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Close",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Menu",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Saved",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Recents",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Get app",
+      "role": "BUTTON"
+    },
+    {
+      "label": "More options",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Save",
+      "text": "Save",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Share",
+      "text": "Share",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "SUNDAE APART4.6Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Lawn4.1Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "REFRESH STAND4.9Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Little Darling Coffee Roasters4.3Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "LIWEI COFFEE4.6Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Allpress Espresso Tokyo Roastery & Cafe4.2Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Alchemist Aoyama4.5Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "LAMBERT4.0Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "WOODBERRY BAKERY4.3Bakery",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Bole COFFEE & ICE CREAM4.5Ice cream shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "SANU NOWHERE4.5Bar",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Friend in Hand3.9Coffee store",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "BARK BAKE & ROAST3.9Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Higuma Doughnuts × Coffee Wrights Omotesando4.2Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "nadoya no katte4.2Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "dotcom coffee Asakusabashi4.6Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "ARC3.9Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Ogawa Coffee Laboratory Shimokitazawa4.3Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Et -THE CULTURAL COFFEEHOUSE-4.4Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "TERON COFFEE & BAR4.3Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "TOGO SHIMOKITAZAWA4.3Cafe",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Glitch Coffee and Roasters GINZA4.3Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "COFFEE COUNTY Tokyo4.6Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Pharos Coffee Jimbocho4.5Coffee shop",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Collapse side panel",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Google apps",
+      "text": "",
+      "role": "button"
+    },
+    {
+      "label": "Close",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Show Your Location",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Learn more",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Zoom in",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Show slider",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Hide slider",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Zoom out",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Browse Street View images",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Show imagery",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Zoom in",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Zoom out",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "Close",
+      "text": "",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Transit",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Traffic",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Biking",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Terrain",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Street View",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Wildfires",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Air Quality",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Travel time",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Measure",
+      "role": "menuitemcheckbox"
+    },
+    {
+      "label": "",
+      "text": "Default",
+      "role": "radio"
+    },
+    {
+      "label": "",
+      "text": "Satellite",
+      "role": "radio"
+    },
+    {
+      "label": "",
+      "text": " Globe view",
+      "role": "checkbox"
+    },
+    {
+      "label": "",
+      "text": " Labels",
+      "role": "checkbox"
+    },
+    {
+      "label": "",
+      "text": "United States",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Terms",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Privacy",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "Send Product Feedback",
+      "role": "BUTTON"
+    },
+    {
+      "label": "",
+      "text": "1 mi",
+      "role": "BUTTON"
+    }
+  ],
+  "bodyText": "\nSearch Google Maps\n\n\n\n\nSaved\n\nRecents\n\nGet app\nTokyo Cafe\nKobayashi Chin · 24 places · Shared list\n\n\nSave\n\nShare\nSUNDAE APART\n4.6\nCoffee shop\nLawn\n4.1\nCoffee shop\nREFRESH STAND\n4.9\nCafe\nLittle Darling Coffee Roasters\n4.3\nCafe\nLIWEI COFFEE\n4.6\nCafe\nAllpress Espresso Tokyo Roastery & Cafe\n4.2\nCoffee shop\nAlchemist Aoyama\n4.5\nCoffee shop\nLAMBERT\n4.0\nCoffee shop\nWOODBERRY BAKERY\n4.3\nBakery\nBole COFFEE & ICE CREAM\n4.5\nIce cream shop\nSANU NOWHERE\n4.5\nBar\nFriend in Hand\n3.9\nCoffee store\nBARK BAKE & ROAST\n3.9\nCafe\nHiguma Doughnuts × Coffee Wrights Omotesando\n4.2\nCoffee shop\nnadoya no katte\n4.2\nCoffee shop\ndotcom coffee Asakusabashi\n4.6\nCoffee shop\nARC\n3.9\nCoffee shop\nOgawa Coffee Laboratory Shimokitazawa\n4.3\nCoffee shop\nEt -THE CULTURAL COFFEEHOUSE-\n4.4\nCafe\nTERON COFFEE & BAR\n4.3\nCoffee shop\nTOGO SHIMOKITAZAWA\n4.3\nCafe\nGlitch Coffee and Roasters GINZA\n4.3\nCoffee shop\nCOFFEE COUNTY Tokyo\n4.6\nCoffee shop\nPharos Coffee Jimbocho\n4.5\nCoffee shop\n\nSign in\n\n\n\n Layers\nMap data ©2026 United StatesTermsPrivacySend Product Feedback\n\t1 mi "
 }
