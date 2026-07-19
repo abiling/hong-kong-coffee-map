@@ -4,7 +4,8 @@
   [
     './filter-scroll.css',
     './compact-nav.css',
-    './city-title-fix.css',
+    './city-title-base.css',
+    './city-title-arrow.css',
     './city-list-fix.css'
   ].forEach(href => {
     const link = document.createElement('link');
