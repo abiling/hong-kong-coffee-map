@@ -7,7 +7,10 @@
     {
       "name": "SUNDAE APART",
       "rating": "4.6",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/place/SUNDAE+APART/@35.6853364,139.6907573,13z/data=!4m10!1m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3!3m5!1s0x60188f003858b38d:0x8e720f955f82321e!8m2!3d35.7023083!4d139.7901368!16s%2Fg%2F11ynx438yc?authuser=0&hl=en&entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
+      "latitude": 35.6853364,
+      "longitude": 139.6907573
     },
     {
       "name": "Lawn",
