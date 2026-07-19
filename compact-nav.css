@@ -1,0 +1,16 @@
+/* Compact mobile bottom navigation and focused search experience */
+@media (max-width: 849px) {
+  :root { --nav-height: 56px; }
+
+  .topbar .filter-row { margin-top: 18px; }
+
+  .bottom-nav {
+    left: 18px;
+    right: auto;
+    bottom: max(12px, var(--safe-bottom));
+    width: min(272px, calc(100vw - 110px));
+    height: var(--nav-height);
+    padding: 4px;
+    gap: 2px;
+    justify-content: flex-start;
+    border-radius: 999px
