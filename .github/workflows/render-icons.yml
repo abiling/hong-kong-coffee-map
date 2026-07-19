@@ -1,0 +1,41 @@
+name: Render App Icons
+
+on:
+  push:
+    paths:
+      - 'icons/icon-source.svg'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install renderer
+        run: pip install cairosvg
+      - name: Render PNG icons
+        run: |
+          python - <<'PY'
+          import cairosvg
+          for size in (180, 192, 512):
+              cairosvg.svg2png(
+                  url='icons/icon-source.svg',
+                  write_to=f'icons/icon-{size}.png',
+                  output_width=size,
+                  output_height=size,
+              )
+          PY
+      - name: Commit rendered icons
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add icons/icon-180.png icons/icon-192.png icons/icon-512.png
+          git diff --cached --quiet && exit 0
+          git commit -m 'Render revised app icons'
+          git push
