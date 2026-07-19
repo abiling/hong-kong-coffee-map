@@ -1,6 +1,11 @@
 (() => {
   'use strict';
 
+  const filterStyles = document.createElement('link');
+  filterStyles.rel = 'stylesheet';
+  filterStyles.href = './filter-scroll.css';
+  document.head.appendChild(filterStyles);
+
   const OriginalMap = window.maplibregl?.Map;
   if (!OriginalMap) return;
 
