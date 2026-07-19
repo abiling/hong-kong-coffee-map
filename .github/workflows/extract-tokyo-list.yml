@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - scripts/geocode_tokyo_places.py
+      - scripts/extract_map_coordinates.js
       - .github/workflows/extract-tokyo-list.yml
 
 permissions:
@@ -15,14 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
-      - run: python scripts/geocode_tokyo_places.py
-      - name: Save geocoded list
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add tmp/tokyo-coffee-list.json
-          git commit -m 'Geocode Tokyo coffee places' || exit 0
-          git push
+          node-version: '20'
+      - run: npm install playwright@1.54.1
+      - run: npx playwright install --with
