@@ -20,7 +20,9 @@
       "category": "Coffee shop",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=Lawn%20Tokyo%20Japan",
       "address": "1 Chome-2 Yotsuya, Shinjuku City, Tokyo 160-0004, Japan",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.6854194,
+      "longitude": 139.6478526
     },
     {
       "name": "REFRESH STAND",
@@ -80,7 +82,9 @@
       "category": "Bakery",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=WOODBERRY%20BAKERY%20Tokyo%20Japan",
       "address": "Japan, 〒150-0011 Tokyo, Shibuya, Higashi, 2 Chome−18−7 渋谷アトウビル",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.6530868,
+      "longitude": 139.708975
     },
     {
       "name": "Bole COFFEE & ICE CREAM",
@@ -138,7 +142,9 @@
       "category": "Coffee shop",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=dotcom%20coffee%20Asakusabashi%20Tokyo%20Japan",
       "address": "Japan, 〒111-0053 Tokyo, Taito City, Asakusabashi, 5 Chome−6−13 KADビル 1F",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.6997486,
+      "longitude": 139.7819691
     },
     {
       "name": "ARC",
@@ -146,7 +152,9 @@
       "category": "Coffee shop",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=ARC%20Tokyo%20Japan",
       "address": "2 Chome-23-10 Koraku, Bunkyo City, Tokyo 112-0004, Japan",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.6763564,
+      "longitude": 139.7649537
     },
     {
       "name": "Ogawa Coffee Laboratory Shimokitazawa",
