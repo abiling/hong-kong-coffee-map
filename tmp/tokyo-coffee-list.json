@@ -8,124 +8,197 @@
       "name": "SUNDAE APART",
       "rating": "4.6",
       "category": "Coffee shop",
-      "google_maps": "https://www.google.com/maps/place/SUNDAE+APART/@35.6853364,139.6907573,13z/data=!4m10!1m3!11m2!2sI_Hv6shssXQf4ZZmwObhcA!3e3!3m5!1s0x60188f003858b38d:0x8e720f955f82321e!8m2!3d35.7023083!4d139.7901368!16s%2Fg%2F11ynx438yc?authuser=0&hl=en&entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
-      "latitude": 35.6853364,
-      "longitude": 139.6907573
+      "google_maps": "https://www.google.com/maps/place/SUNDAE+APART/@35.7023083,139.7901368,17z/data=!3m1!4b1!4m6!3m5!1s0x60188f003858b38d:0x8e720f955f82321e!8m2!3d35.7023083!4d139.7901368!16s%2Fg%2F11ynx438yc?entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
+      "latitude": 35.7023083,
+      "longitude": 139.7901368,
+      "address": "2 Chome-3-4 Kuramae, Taito City, Tokyo 111-0051, Japan",
+      "permanently_closed": false
     },
     {
       "name": "Lawn",
       "rating": "4.1",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Lawn%20Tokyo%20Japan",
+      "address": "1 Chome-2 Yotsuya, Shinjuku City, Tokyo 160-0004, Japan",
+      "permanently_closed": false
     },
     {
       "name": "REFRESH STAND",
       "rating": "4.9",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/place/REFRESH+STAND/@35.6999442,139.7893727,17z/data=!3m1!4b1!4m6!3m5!1s0x60188f00438271ad:0xaecd3e0c20f46e44!8m2!3d35.6999442!4d139.7893727!16s%2Fg%2F11n9ss2png?entry=ttu&g_ep=EgoyMDI2MDcxNS4wIKXMDSoASAFQAw%3D%3D",
+      "latitude": 35.6999442,
+      "longitude": 139.7893727,
+      "address": "Japan, 〒111-0051 Tokyo, Taito City, Kuramae, 1 Chome−4−1 MOV KURAMAE 1F",
+      "permanently_closed": false
     },
     {
       "name": "Little Darling Coffee Roasters",
       "rating": "4.3",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Little%20Darling%20Coffee%20Roasters%20Tokyo%20Japan",
+      "address": "1 Chome-12-32 Minamiaoyama, Minato City, Tokyo 107-0062, Japan",
+      "permanently_closed": false
     },
     {
       "name": "LIWEI COFFEE",
       "rating": "4.6",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=LIWEI%20COFFEE%20Tokyo%20Japan",
+      "address": "Japan, 〒170-0002 Tokyo, Toshima City, Sugamo, 1 Chome−19−10 土屋ビル １階",
+      "permanently_closed": false
     },
     {
       "name": "Allpress Espresso Tokyo Roastery & Cafe",
       "rating": "4.2",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Allpress%20Espresso%20Tokyo%20Roastery%20%26%20Cafe%20Tokyo%20Japan",
+      "address": "3 Chome-7-2 Hirano, Koto City, Tokyo 135-0023, Japan",
+      "permanently_closed": false
     },
     {
       "name": "Alchemist Aoyama",
       "rating": "4.5",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Alchemist%20Aoyama%20Tokyo%20Japan",
+      "address": "2 Chome-1-9 Shibuya, Tokyo 150-0002, Japan",
+      "permanently_closed": false
     },
     {
       "name": "LAMBERT",
       "rating": "4.0",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=LAMBERT%20Tokyo%20Japan",
+      "address": "3 Chome-22-15 Hyakunincho, Shinjuku City, Tokyo 169-0073, Japan",
+      "permanently_closed": false
     },
     {
       "name": "WOODBERRY BAKERY",
       "rating": "4.3",
-      "category": "Bakery"
+      "category": "Bakery",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=WOODBERRY%20BAKERY%20Tokyo%20Japan",
+      "address": "Japan, 〒150-0011 Tokyo, Shibuya, Higashi, 2 Chome−18−7 渋谷アトウビル",
+      "permanently_closed": false
     },
     {
       "name": "Bole COFFEE & ICE CREAM",
       "rating": "4.5",
-      "category": "Ice cream shop"
+      "category": "Ice cream shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Bole%20COFFEE%20%26%20ICE%20CREAM%20Tokyo%20Japan",
+      "address": "Japan, 〒156-0042 Tokyo, Setagaya City, Hanegi, 1 Chome−19−19 IGH CT03",
+      "permanently_closed": false
     },
     {
       "name": "SANU NOWHERE",
       "rating": "4.5",
-      "category": "Bar"
+      "category": "Bar",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=SANU%20NOWHERE%20Tokyo%20Japan",
+      "address": "Japan, 〒153-0061 Tokyo, Meguro City, Nakameguro, 3 Chome−23−16 1F",
+      "permanently_closed": false
     },
     {
       "name": "Friend in Hand",
       "rating": "3.9",
-      "category": "Coffee store"
+      "category": "Coffee store",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Friend%20in%20Hand%20Tokyo%20Japan",
+      "address": "Japan, 〒107-0061 Tokyo, Minato City, Kita-Aoyama, 3 Chome−6−20 Kfi Building, ９階",
+      "permanently_closed": false
     },
     {
       "name": "BARK BAKE & ROAST",
       "rating": "3.9",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=BARK%20BAKE%20%26%20ROAST%20Tokyo%20Japan",
+      "address": "3 Chome-13-4 Kuramae, Taito City, Tokyo 111-0051, Japan",
+      "permanently_closed": false
     },
     {
       "name": "Higuma Doughnuts × Coffee Wrights Omotesando",
       "rating": "4.2",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Higuma%20Doughnuts%20%C3%97%20Coffee%20Wrights%20Omotesando%20Tokyo%20Japan",
+      "address": "Japan, 〒150-0001 Tokyo, Shibuya, Jingumae, 4 Chome−9−13 ミナガワビレッジⅠ ミナガワビレッジ #5",
+      "permanently_closed": false
     },
     {
       "name": "nadoya no katte",
       "rating": "4.2",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=nadoya%20no%20katte%20Tokyo%20Japan",
+      "address": "3 Chome-19-3 Nishihara, Shibuya, Tokyo 151-0066, Japan",
+      "permanently_closed": false
     },
     {
       "name": "dotcom coffee Asakusabashi",
       "rating": "4.6",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=dotcom%20coffee%20Asakusabashi%20Tokyo%20Japan",
+      "address": "Japan, 〒111-0053 Tokyo, Taito City, Asakusabashi, 5 Chome−6−13 KADビル 1F",
+      "permanently_closed": false
     },
     {
       "name": "ARC",
       "rating": "3.9",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=ARC%20Tokyo%20Japan",
+      "address": "2 Chome-23-10 Koraku, Bunkyo City, Tokyo 112-0004, Japan",
+      "permanently_closed": false
     },
     {
       "name": "Ogawa Coffee Laboratory Shimokitazawa",
       "rating": "4.3",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Ogawa%20Coffee%20Laboratory%20Shimokitazawa%20Tokyo%20Japan",
+      "address": "Japan, 〒155-0031 Tokyo, Setagaya City, Kitazawa, 3 Chome−19−20 reload1-1",
+      "permanently_closed": false
     },
     {
       "name": "Et -THE CULTURAL COFFEEHOUSE-",
       "rating": "4.4",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Et%20-THE%20CULTURAL%20COFFEEHOUSE-%20Tokyo%20Japan",
+      "address": "Japan, 〒155-0031 Tokyo, Setagaya City, Kitazawa, 2 Chome−22−3 下北パークフロント 1F,2F",
+      "permanently_closed": false
     },
     {
       "name": "TERON COFFEE & BAR",
       "rating": "4.3",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=TERON%20COFFEE%20%26%20BAR%20Tokyo%20Japan",
+      "address": "3 Chome-11-3 Ginza, Chuo City, Tokyo 104-0061, Japan",
+      "permanently_closed": false
     },
     {
       "name": "TOGO SHIMOKITAZAWA",
       "rating": "4.3",
-      "category": "Cafe"
+      "category": "Cafe",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=TOGO%20SHIMOKITAZAWA%20Tokyo%20Japan",
+      "address": "Japan, 〒155-0033 Tokyo, Setagaya City, Daita, 2 Chome−36−19 HORABUILDING1F",
+      "permanently_closed": false
     },
     {
       "name": "Glitch Coffee and Roasters GINZA",
       "rating": "4.3",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Glitch%20Coffee%20and%20Roasters%20GINZA%20Tokyo%20Japan",
+      "address": "Japan, 〒104-0061 Tokyo, Chuo City, Ginza, 4 Chome−14−8 VORT銀座イーストIII 1階",
+      "permanently_closed": false
     },
     {
       "name": "COFFEE COUNTY Tokyo",
       "rating": "4.6",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=COFFEE%20COUNTY%20Tokyo%20Tokyo%20Japan",
+      "address": "Japan, 〒155-0031 Tokyo, Setagaya City, Kitazawa, 1 Chome−30−3 ホーメンス北沢",
+      "permanently_closed": false
     },
     {
       "name": "Pharos Coffee Jimbocho",
       "rating": "4.5",
-      "category": "Coffee shop"
+      "category": "Coffee shop",
+      "google_maps": "https://www.google.com/maps/search/?api=1&query=Pharos%20Coffee%20Jimbocho%20Tokyo%20Japan",
+      "address": "1 Chome-25-4 Kanda Jinbocho, Chiyoda City, Tokyo 101-0051, Japan",
+      "permanently_closed": false
     }
   ],
   "controls": [
