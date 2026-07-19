@@ -1,0 +1,18 @@
+/* Mobile full-width horizontal region filters */
+@media (max-width: 849px) {
+  .filter-row {
+    width: calc(100vw - 18px);
+    margin-right: -18px;
+    padding-right: 18px;
+    padding-bottom: 4px;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
+  }
+  .filter-row .chip {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+}
