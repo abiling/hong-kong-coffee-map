@@ -4,7 +4,6 @@
   [
     './filter-scroll.css',
     './compact-nav.css',
-    './multicity.css',
     './city-title-fix.css',
     './city-list-fix.css'
   ].forEach(href => {
