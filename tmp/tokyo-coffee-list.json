@@ -62,7 +62,9 @@
       "category": "Coffee shop",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=Alchemist%20Aoyama%20Tokyo%20Japan",
       "address": "2 Chome-1-9 Shibuya, Tokyo 150-0002, Japan",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.6596837,
+      "longitude": 139.706267
     },
     {
       "name": "LAMBERT",
@@ -126,7 +128,9 @@
       "category": "Coffee shop",
       "google_maps": "https://www.google.com/maps/search/?api=1&query=nadoya%20no%20katte%20Tokyo%20Japan",
       "address": "3 Chome-19-3 Nishihara, Shibuya, Tokyo 151-0066, Japan",
-      "permanently_closed": false
+      "permanently_closed": false,
+      "latitude": 35.670867,
+      "longitude": 139.6801396
     },
     {
       "name": "dotcom coffee Asakusabashi",
