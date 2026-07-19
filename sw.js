@@ -1,6 +1,6 @@
-const CACHE = 'hk-coffee-map-v3-20260719d';
+const CACHE = 'hk-coffee-map-v3-20260719e';
 const SHELL = [
-  './', './index.html', './styles.css', './admin.css', './map-config.js', './app.js', './admin-core.js', './manifest.webmanifest',
+  './', './index.html', './styles.css', './admin.css', './filter-scroll.css', './map-config.js', './app.js', './admin-core.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
 
