@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  ['./filter-scroll.css', './compact-nav.css'].forEach(href => {
+  ['./filter-scroll.css', './compact-nav.css', './multicity.css'].forEach(href => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
@@ -16,6 +16,10 @@
       }
     }
     window.maplibregl.Map = WorldZoomMap;
+  }
+
+  if (!document.querySelector('script[data-multicity]')) {
+    document.write('<script src="./multicity.js" data-multicity="true"><\/script>');
   }
 
   window.addEventListener('load', () => {
