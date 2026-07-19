@@ -1,7 +1,13 @@
 (() => {
   'use strict';
 
-  ['./filter-scroll.css', './compact-nav.css', './multicity.css'].forEach(href => {
+  [
+    './filter-scroll.css',
+    './compact-nav.css',
+    './multicity.css',
+    './city-title-fix.css',
+    './city-list-fix.css'
+  ].forEach(href => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
