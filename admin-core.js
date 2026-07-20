@@ -90,7 +90,7 @@
     let horizontal = false;
 
     card.addEventListener('pointerdown', event => {
-      if (!hasKey() || !document.body.matches('.list-view')) return;
+      if (!hasKey() || !document.body.matches('.list-view,.saved-view')) return;
       dragging = true;
       horizontal = false;
       startX = event.clientX;

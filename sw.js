@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v7-20260720-semantic-buttons';
+const CACHE = 'coffee-map-v8-20260720-cloud-favorites';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',

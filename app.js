@@ -79,7 +79,8 @@
       region: String(raw.region || '待确认'), district: String(raw.district || '待确认'),
       latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
       appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''),
-      source: String(raw.source || ''), notes: String(raw.notes || ''), active: raw.active !== false
+      source: String(raw.source || ''), notes: String(raw.notes || ''), active: raw.active !== false,
+      favorite: toBoolean(raw.favorite)
     };
   }
 
@@ -122,7 +123,7 @@
 
   function renderList() {
     els.allCount.textContent = shops.length; els.resultCount.textContent = filtered.length;
-    if (!filtered.length) { els.list.innerHTML = '<div class="empty-state">没有符合当前条件的咖啡店</div>'; return; }
+    if (!filtered.length) { els.list.innerHTML = `<div class="empty-state">${activeView === 'saved' ? '还没有收藏咖啡店' : '没有符合当前条件的咖啡店'}</div>`; return; }
     els.list.innerHTML = filtered.map(s => `<button class="shop-card" data-shop-id="${escapeHtml(s.id)}"><h3>${escapeHtml(s.name)}</h3><p><span class="area">${escapeHtml(s.district)}</span>${escapeHtml(s.address)}</p></button>`).join('');
     els.list.querySelectorAll('[data-shop-id]').forEach(card => card.addEventListener('click', () => selectShop(card.dataset.shopId, true)));
   }
@@ -133,7 +134,8 @@
       const regionOK = activeRegion === '全部' || s.region === activeRegion;
       const districtOK = activeDistrict === '全部' || s.district === activeDistrict;
       const searchOK = !q || [s.name, s.address, s.region, s.district, s.category, s.notes].some(v => normalize(v).includes(q));
-      return regionOK && districtOK && searchOK;
+      const savedOK = activeView !== 'saved' || s.favorite;
+      return regionOK && districtOK && searchOK && savedOK;
     });
     renderList(); if (map?.loaded()) renderMarkers(); if (fit) fitTo(filtered, true);
   }
@@ -158,6 +160,7 @@
     const validMapUrl = window.CoffeeMapCities?.validateMapUrl(provider, mapUrl) ?? Boolean(mapUrl);
     setMapAction($('#googleMapsButton'), provider === 'google' && validMapUrl, shop.googleMaps);
     setMapAction($('#appleMapsButton'), provider === 'apple' && validMapUrl, shop.appleMaps);
+    renderFavoriteAction(shop);
     openSheet(els.detailSheet);
   }
 
@@ -185,6 +188,7 @@
     $$('.nav-item').forEach(b => b.addEventListener('click', () => {
       activeView = b.dataset.view; $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
       document.body.classList.toggle('list-view', activeView === 'list');
+      document.body.classList.toggle('saved-view', activeView === 'saved');
       applyFilters(); setTimeout(() => map?.resize(), 80);
     }));
     $('#locateButton').addEventListener('click', () => navigator.geolocation?.getCurrentPosition(p => map?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14.5 }), () => showToast('无法取得当前位置'), { enableHighAccuracy: true, timeout: 8000 }));
@@ -194,6 +198,7 @@
     ['google_maps', 'apple_maps'].forEach(field => els.addForm.elements[field]?.addEventListener('input', markPlaceLinkChanged));
     els.addForm.addEventListener('submit', saveNewShop);
     $('#useMapCenter').addEventListener('click', () => { if (!map) return; const c = map.getCenter(); els.addForm.elements.latitude.value = c.lat.toFixed(7); els.addForm.elements.longitude.value = c.lng.toFixed(7); });
+    $('#favoriteButton').addEventListener('click', toggleFavorite);
     $('#menuButton').addEventListener('click', () => { renderAdminKeyState(); openSheet(els.menuSheet); });
     $$('[data-close-sheet]').forEach(x => x.addEventListener('click', () => closeSheet(els.detailSheet)));
     $$('[data-close-district]').forEach(x => x.addEventListener('click', () => closeSheet(els.districtSheet)));
@@ -227,6 +232,7 @@
     const data = Object.fromEntries([...fd.entries()].map(([k,v]) => [k, String(v).trim()]));
     data.latitude = Number(data.latitude); data.longitude = Number(data.longitude); data.active = true;
     data.status = '想去'; // Keep the existing Sheet schema compatible; status is no longer a user-facing feature.
+    data.favorite = false;
     const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
     if (!data[mapRule.requiredField] || mapRule.valid === false || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
     els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
@@ -235,6 +241,36 @@
       renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端地图');
     } catch (error) { showToast(error.message); }
     finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端地图'; }
+  }
+
+  async function toggleFavorite() {
+    const current = shops.find(shop => shop.id === selectedId);
+    if (!current) return;
+    const button = $('#favoriteButton');
+    button.disabled = true;
+    try {
+      const { shop } = await apiPost('setFavorite', { id: current.id, favorite: !current.favorite });
+      const updated = normalizeShop(shop);
+      const index = shops.findIndex(item => item.id === updated.id);
+      if (index >= 0) shops[index] = updated;
+      renderFavoriteAction(updated);
+      applyFilters();
+      if (activeView === 'saved' && !updated.favorite) closeSheet(els.detailSheet);
+      setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`);
+      showToast(updated.favorite ? '已加入收藏' : '已取消收藏');
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function renderFavoriteAction(shop) {
+    const button = $('#favoriteButton');
+    if (!button) return;
+    button.classList.toggle('active', shop.favorite);
+    button.setAttribute('aria-pressed', String(shop.favorite));
+    $('#favoriteButtonLabel').textContent = shop.favorite ? '取消收藏' : '收藏';
   }
 
   function renderAdminKeyState() {
@@ -249,7 +285,7 @@
   }
   function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
-  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
+  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Favorite','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.favorite,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
   function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
@@ -264,6 +300,7 @@
     else button.removeAttribute('href');
   }
   function normalize(v) { return String(v || '').trim().toLowerCase(); }
+  function toBoolean(v) { return v === true || v === 1 || String(v || '').trim().toLowerCase() === 'true'; }
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 

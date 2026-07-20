@@ -14,13 +14,15 @@
 .swipe-action{width:72px;border:0;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
 .swipe-edit{background:#77736c}.swipe-delete{background:#b5483d}
 
-body:not(.list-view) .swipe-actions{display:none}
-body:not(.list-view) .swipe-row{overflow:visible}
-body:not(.list-view) .swipe-row .shop-card{transform:none!important}
+body:not(.list-view):not(.saved-view) .swipe-actions{display:none}
+body:not(.list-view):not(.saved-view) .swipe-row{overflow:visible}
+body:not(.list-view):not(.saved-view) .swipe-row .shop-card{transform:none!important}
 
 .edit-place-dialog{z-index:80}.edit-place-dialog form{padding:24px}.edit-place-dialog::backdrop{background:rgba(15,14,12,.42);backdrop-filter:blur(3px)}
 
 @media(hover:hover) and (pointer:fine){
-  body.list-view.admin-enabled .swipe-row:hover .shop-card{transform:translateX(-144px)}
-  body.list-view.admin-enabled .swipe-row:hover .swipe-actions{opacity:1;visibility:visible;pointer-events:auto}
+  body.list-view.admin-enabled .swipe-row:hover .shop-card,
+  body.saved-view.admin-enabled .swipe-row:hover .shop-card{transform:translateX(-144px)}
+  body.list-view.admin-enabled .swipe-row:hover .swipe-actions,
+  body.saved-view.admin-enabled .swipe-row:hover .swipe-actions{opacity:1;visibility:visible;pointer-events:auto}
 }

@@ -70,7 +70,8 @@
   .map-fab.locate-fab { bottom: calc(var(--nav-height) + var(--safe-bottom) + 86px); }
   .maplibregl-ctrl-bottom-left { bottom: calc(var(--nav-height) + var(--safe-bottom) + 28px); }
 
-  body.list-view .list-panel {
+  body.list-view .list-panel,
+  body.saved-view .list-panel {
     bottom: calc(var(--nav-height) + var(--safe-bottom) + 22px);
   }
 

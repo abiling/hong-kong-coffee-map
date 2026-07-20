@@ -60,7 +60,6 @@
         region: String(shop.region || ''),
         address: String(shop.address || ''),
         category: String(shop.category || ''),
-        status: String(shop.status || ''),
         notes: String(shop.notes || '')
       }));
       if (overlay.classList.contains('open') && overlayInput.value.trim()) renderResults();
