@@ -176,14 +176,14 @@
     button.type = 'button';
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-controls', 'citySheet');
-    button.innerHTML = `<span data-city-label>${escapeHtml(activeConfig.label)}</span><span class="city-chevron" aria-hidden="true">⌄</span>`;
+    button.innerHTML = `<span data-city-label>${escapeHtml(activeConfig.label)}</span><span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>`;
     heading.replaceWith(button);
 
     const sheet = document.createElement('div');
     sheet.id = 'citySheet';
     sheet.className = 'sheet';
     sheet.setAttribute('aria-hidden', 'true');
-    sheet.innerHTML = `<div class="sheet-backdrop" data-close-city></div><article class="sheet-card compact-card city-sheet-card"><div class="sheet-grabber"></div><div class="sheet-title-row"><div><p class="list-kicker">Cities</p><h2>选择城市</h2></div><button class="sheet-close" type="button" data-close-city aria-label="关闭">×</button></div><div id="cityList" class="city-list">${Object.keys(CITIES).map(city => `<button class="city-option${city === activeCity ? ' active' : ''}" type="button" data-city="${escapeHtml(city)}"><span><strong>${escapeHtml(CITIES[city].label)}</strong><small>${escapeHtml(CITIES[city].country)}</small></span><b aria-hidden="true">${city === activeCity ? '✓' : ''}</b></button>`).join('')}</div></article>`;
+    sheet.innerHTML = `<div class="sheet-backdrop" data-close-city></div><article class="sheet-card compact-card city-sheet-card"><div class="sheet-grabber"></div><div class="sheet-title-row"><div><p class="list-kicker">Cities</p><h2>选择城市</h2></div><button class="sheet-close" type="button" data-close-city aria-label="关闭"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button></div><div id="cityList" class="city-list">${Object.keys(CITIES).map(city => `<button class="city-option${city === activeCity ? ' active' : ''}" type="button" data-city="${escapeHtml(city)}"><span><strong>${escapeHtml(CITIES[city].label)}</strong><small>${escapeHtml(CITIES[city].country)}</small></span><b aria-hidden="true">${city === activeCity ? '<svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-check"/></svg>' : ''}</b></button>`).join('')}</div></article>`;
     document.body.appendChild(sheet);
     button.addEventListener('click', () => openSheet(sheet));
     sheet.querySelectorAll('[data-close-city]').forEach(node => node.addEventListener('click', () => closeSheet(sheet)));
@@ -198,7 +198,7 @@
   function renderRegionRail() {
     const rail = document.querySelector('#regionFilters');
     if (!rail) return;
-    rail.innerHTML = `<button class="chip active" data-region="全部">全部 <span id="allCount">—</span></button>${activeConfig.regions.map(region => `<button class="chip" data-region="${escapeHtml(region)}">${escapeHtml(region)}</button>`).join('')}<button class="chip district-chip" id="districtButton" type="button">具体地区 <span>⌄</span></button>`;
+    rail.innerHTML = `<button class="chip active" data-region="全部">全部 <span id="allCount">—</span></button>${activeConfig.regions.map(region => `<button class="chip" data-region="${escapeHtml(region)}">${escapeHtml(region)}</button>`).join('')}<button class="chip district-chip" id="districtButton" type="button">具体地区 <svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-expand-more"/></svg></button>`;
   }
 
   function enhanceAddForm() {

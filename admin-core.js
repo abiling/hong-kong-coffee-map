@@ -183,7 +183,7 @@
     document.body.insertAdjacentHTML('beforeend', `
       <dialog id="editPlaceDialog" class="add-dialog edit-place-dialog">
         <form id="editPlaceForm" method="dialog">
-          <div class="dialog-head"><div><p class="list-kicker">Edit Place</p><h2>编辑咖啡店</h2></div><button type="button" id="closeEditDialog" class="sheet-close">×</button></div>
+          <div class="dialog-head"><div><p class="list-kicker">Edit Place</p><h2>编辑咖啡店</h2></div><button type="button" id="closeEditDialog" class="sheet-close" aria-label="关闭"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button></div>
           <div class="form-grid">
             <label class="full primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required /></label>
             <label class="full primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" disabled /></label>

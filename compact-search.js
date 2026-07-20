@@ -15,7 +15,7 @@
   searchButton.className = 'compact-search-button';
   searchButton.setAttribute('aria-label', '搜索咖啡店');
   searchButton.innerHTML = `
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+    <svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-search"/></svg>
     <span class="compact-search-count" aria-hidden="true">0</span>`;
   nav.insertAdjacentElement('afterend', searchButton);
 
@@ -27,9 +27,9 @@
     <div class="search-mode-content">
       <div class="search-mode-bar">
         <label class="search-mode-field">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+          <svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-search"/></svg>
           <input class="search-mode-input" type="search" inputmode="search" autocomplete="off" placeholder="搜索店名、地址或地区" aria-label="搜索店名、地址或地区" />
-          <button class="search-mode-clear" type="button" aria-label="清除搜索">×</button>
+          <button class="search-mode-clear" type="button" aria-label="清除搜索"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button>
         </label>
         <button class="search-mode-cancel" type="button">取消</button>
       </div>

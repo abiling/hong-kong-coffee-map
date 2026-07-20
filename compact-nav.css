@@ -128,9 +128,11 @@
     border: 0;
     border-radius: 999px;
     background: #efede7;
-    font-size: 20px;
     color: var(--muted);
+    display: grid;
+    place-items: center;
   }
+  .search-mode-clear .material-symbol { width: 19px; height: 19px; }
   .search-mode-cancel {
     height: 44px;
     padding: 0 8px;

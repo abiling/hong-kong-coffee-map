@@ -270,6 +270,7 @@
     if (!button) return;
     button.classList.toggle('active', shop.favorite);
     button.setAttribute('aria-pressed', String(shop.favorite));
+    button.querySelector('use')?.setAttribute('href', shop.favorite ? '#ms-bookmark-filled' : '#ms-bookmark');
     $('#favoriteButtonLabel').textContent = shop.favorite ? '取消收藏' : '收藏';
   }
 

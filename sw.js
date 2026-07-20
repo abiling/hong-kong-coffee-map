@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v8-20260720-cloud-favorites';
+const CACHE = 'coffee-map-v9-20260720-material-symbols';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
