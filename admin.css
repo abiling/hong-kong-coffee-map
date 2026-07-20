@@ -3,9 +3,9 @@
 .detail-actions{display:block}.detail-admin-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.admin-enabled .detail-admin-actions{display:grid}.admin-action{height:42px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px}.admin-action.delete-action{color:#a13d32;border-color:rgba(161,61,50,.25)}
 
 /* Each row is a two-layer stack: opaque content above, actions below. */
-.swipe-row{position:relative;overflow:hidden;background:#faf9f5;border-radius:999px}
+.swipe-row{position:relative;overflow:hidden;background:#faf9f5;border-radius:0}
 .swipe-row+.swipe-row{border-top:1px solid rgba(23,23,19,.075)}
-.swipe-row .shop-card{position:relative;z-index:2;background:#faf9f5;transition:transform .24s cubic-bezier(.2,.8,.2,1);touch-action:pan-y;border-radius:999px!important}
+.swipe-row .shop-card{position:relative;z-index:2;background:#faf9f5;transition:transform .24s cubic-bezier(.2,.8,.2,1);touch-action:pan-y;border-radius:0!important}
 .swipe-row.dragging .shop-card{transition:none}
 .swipe-row+.swipe-row .shop-card{border-top:0}
 

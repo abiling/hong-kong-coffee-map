@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v6-20260720-pill-ui';
+const CACHE = 'coffee-map-v7-20260720-semantic-buttons';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
