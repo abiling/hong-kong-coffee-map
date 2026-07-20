@@ -78,7 +78,7 @@
       city: String(raw.city || window.CoffeeMapCities?.activeCity || 'Hong Kong'), country: String(raw.country || ''),
       region: String(raw.region || '待确认'), district: String(raw.district || '待确认'),
       latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
-      appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''), status: String(raw.status || '想去'),
+      appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''),
       source: String(raw.source || ''), notes: String(raw.notes || ''), active: raw.active !== false
     };
   }
@@ -132,9 +132,8 @@
     filtered = shops.filter(s => {
       const regionOK = activeRegion === '全部' || s.region === activeRegion;
       const districtOK = activeDistrict === '全部' || s.district === activeDistrict;
-      const searchOK = !q || [s.name, s.address, s.region, s.district, s.category, s.status, s.notes].some(v => normalize(v).includes(q));
-      const savedOK = activeView !== 'saved' || s.status === '优先去';
-      return regionOK && districtOK && searchOK && savedOK;
+      const searchOK = !q || [s.name, s.address, s.region, s.district, s.category, s.notes].some(v => normalize(v).includes(q));
+      return regionOK && districtOK && searchOK;
     });
     renderList(); if (map?.loaded()) renderMarkers(); if (fit) fitTo(filtered, true);
   }
@@ -159,7 +158,6 @@
     const validMapUrl = window.CoffeeMapCities?.validateMapUrl(provider, mapUrl) ?? Boolean(mapUrl);
     setMapAction($('#googleMapsButton'), provider === 'google' && validMapUrl, shop.googleMaps);
     setMapAction($('#appleMapsButton'), provider === 'apple' && validMapUrl, shop.appleMaps);
-    $$('.status-button').forEach(b => b.classList.toggle('active', b.dataset.status === shop.status));
     openSheet(els.detailSheet);
   }
 
@@ -186,7 +184,7 @@
     $('#fitButton').addEventListener('click', () => fitTo(filtered, true));
     $$('.nav-item').forEach(b => b.addEventListener('click', () => {
       activeView = b.dataset.view; $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
-      document.body.classList.toggle('list-view', activeView === 'list'); document.body.classList.toggle('saved-view', activeView === 'saved');
+      document.body.classList.toggle('list-view', activeView === 'list');
       applyFilters(); setTimeout(() => map?.resize(), 80);
     }));
     $('#locateButton').addEventListener('click', () => navigator.geolocation?.getCurrentPosition(p => map?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14.5 }), () => showToast('无法取得当前位置'), { enableHighAccuracy: true, timeout: 8000 }));
@@ -196,7 +194,6 @@
     ['google_maps', 'apple_maps'].forEach(field => els.addForm.elements[field]?.addEventListener('input', markPlaceLinkChanged));
     els.addForm.addEventListener('submit', saveNewShop);
     $('#useMapCenter').addEventListener('click', () => { if (!map) return; const c = map.getCenter(); els.addForm.elements.latitude.value = c.lat.toFixed(7); els.addForm.elements.longitude.value = c.lng.toFixed(7); });
-    $$('.status-button').forEach(b => b.addEventListener('click', () => updateStatus(b.dataset.status)));
     $('#menuButton').addEventListener('click', () => { renderAdminKeyState(); openSheet(els.menuSheet); });
     $$('[data-close-sheet]').forEach(x => x.addEventListener('click', () => closeSheet(els.detailSheet)));
     $$('[data-close-district]').forEach(x => x.addEventListener('click', () => closeSheet(els.districtSheet)));
@@ -218,7 +215,7 @@
     els.parseButton.disabled = true; els.parseButton.textContent = '解析中…'; els.parseState.textContent = '正在解析地点…';
     try {
       const { place } = await apiPost('parse', { city, [field]: url });
-      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','status','source','notes','city','country'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
+      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','source','notes','city','country'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
       window.CoffeeMapCities?.syncForm(els.addForm, place?.city || city);
       els.parseState.textContent = '解析完成，请确认并按需修改'; els.parseState.className = 'success';
     } catch (error) { els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message); }
@@ -229,6 +226,7 @@
     event.preventDefault(); const fd = new FormData(els.addForm);
     const data = Object.fromEntries([...fd.entries()].map(([k,v]) => [k, String(v).trim()]));
     data.latitude = Number(data.latitude); data.longitude = Number(data.longitude); data.active = true;
+    data.status = '想去'; // Keep the existing Sheet schema compatible; status is no longer a user-facing feature.
     const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
     if (!data[mapRule.requiredField] || mapRule.valid === false || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
     els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
@@ -239,21 +237,11 @@
     finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端地图'; }
   }
 
-  async function updateStatus(status) {
-    if (!selectedId) return;
-    try {
-      const { shop } = await apiPost('setStatus', { id: selectedId, status }); const updated = normalizeShop(shop);
-      const i = shops.findIndex(s => s.id === selectedId); if (i >= 0) shops[i] = updated;
-      applyFilters(); selectShop(selectedId, false); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast(`已标记为“${status}”`);
-    } catch (error) { showToast(error.message); }
-  }
-
   function renderAdminKeyState() {
     const has = Boolean(localStorage.getItem(ADMIN_KEY_STORAGE)); els.adminKeyInput.value = ''; els.adminKeyInput.placeholder = has ? '已保存在本机' : '未设置'; $('#clearAdminKeyButton').disabled = !has;
   }
   function resetAddForm() {
     els.addForm.reset();
-    els.addForm.elements.status.value = '想去';
     els.parseState.className = '';
     window.CoffeeMapCities?.syncForm(els.addForm, window.CoffeeMapCities.activeCity);
     const provider = els.addForm.dataset.mapProvider === 'apple' ? 'Apple Maps' : 'Google Maps';
@@ -261,7 +249,7 @@
   }
   function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
-  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Status','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.status,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
+  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
   function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }

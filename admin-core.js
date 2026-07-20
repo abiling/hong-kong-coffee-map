@@ -90,7 +90,7 @@
     let horizontal = false;
 
     card.addEventListener('pointerdown', event => {
-      if (!hasKey() || !document.body.matches('.list-view,.saved-view')) return;
+      if (!hasKey() || !document.body.matches('.list-view')) return;
       dragging = true;
       horizontal = false;
       startX = event.clientX;
@@ -152,13 +152,13 @@
   }
 
   function installDetailAdminActions() {
-    const statusRow = $('#statusRow');
-    if (!statusRow || $('#detailAdminActions')) return;
+    const detailActions = $('.detail-actions');
+    if (!detailActions || $('#detailAdminActions')) return;
     const actions = document.createElement('div');
     actions.id = 'detailAdminActions';
     actions.className = 'detail-admin-actions';
     actions.innerHTML = '<button id="editSelectedButton" class="admin-action edit-action" type="button">编辑地点</button><button id="deleteSelectedButton" class="admin-action delete-action" type="button">删除地点</button>';
-    statusRow.insertAdjacentElement('afterend', actions);
+    detailActions.insertAdjacentElement('afterend', actions);
     $('#editSelectedButton').addEventListener('click', () => {
       const shop = resolveDetailShop();
       if (shop) openEditor(shop.id);
@@ -190,7 +190,6 @@
             <label><span>店铺名称 *</span><input name="name" required /></label>
             <label><span>具体地区 *</span><input name="district" required /></label>
             <label><span>大区 *</span><input name="region" required /></label>
-            <label><span>状态</span><select name="status"><option>想去</option><option>优先去</option><option>去过</option></select></label>
             <label class="full"><span>地址 *</span><input name="address" required /></label>
             <label><span>纬度 *</span><input name="latitude" type="number" step="any" required /></label>
             <label><span>经度 *</span><input name="longitude" type="number" step="any" required /></label>
@@ -211,7 +210,7 @@
     if (!shop) return showToast('找不到这个地点');
     const form = $('#editPlaceForm');
     form.dataset.shopId = shop.id;
-    const fields = ['google_maps', 'apple_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'status', 'source', 'notes', 'city', 'country'];
+    const fields = ['google_maps', 'apple_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'source', 'notes', 'city', 'country'];
     fields.forEach(field => {
       if (form.elements[field]) form.elements[field].value = shop[field] ?? '';
     });
@@ -227,6 +226,7 @@
     data.latitude = Number(data.latitude);
     data.longitude = Number(data.longitude);
     data.active = true;
+    data.status = shopIndex.get(String(data.id))?.status || '想去';
     const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
     if (!data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写当前城市指定的有效地图链接');
     button.disabled = true;

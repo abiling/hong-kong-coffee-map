@@ -1,28 +1,26 @@
 /* Administrator editing and swipe actions */
-.map-link-action{gap:9px}.map-link-action svg{width:19px;height:19px;stroke-width:1.9}
-.detail-actions{display:block}.detail-admin-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.admin-enabled .detail-admin-actions{display:grid}.admin-action{height:42px;border-radius:12px;border:1px solid var(--line);background:transparent;font-size:12px}.admin-action.delete-action{color:#a13d32;border-color:rgba(161,61,50,.25)}
+.map-link-action{gap:9px}.map-link-action svg{width:19px;height:19px}.map-link-action .map-service-icon{fill:currentColor;stroke:none}
+.detail-actions{display:block}.detail-admin-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.admin-enabled .detail-admin-actions{display:grid}.admin-action{height:42px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px}.admin-action.delete-action{color:#a13d32;border-color:rgba(161,61,50,.25)}
 
 /* Each row is a two-layer stack: opaque content above, actions below. */
-.swipe-row{position:relative;overflow:hidden;background:#faf9f5;border-radius:0}
+.swipe-row{position:relative;overflow:hidden;background:#faf9f5;border-radius:999px}
 .swipe-row+.swipe-row{border-top:1px solid rgba(23,23,19,.075)}
-.swipe-row .shop-card{position:relative;z-index:2;background:#faf9f5;transition:transform .24s cubic-bezier(.2,.8,.2,1);touch-action:pan-y;border-radius:0!important}
+.swipe-row .shop-card{position:relative;z-index:2;background:#faf9f5;transition:transform .24s cubic-bezier(.2,.8,.2,1);touch-action:pan-y;border-radius:999px!important}
 .swipe-row.dragging .shop-card{transition:none}
 .swipe-row+.swipe-row .shop-card{border-top:0}
 
 .swipe-actions{position:absolute;z-index:1;top:0;right:0;bottom:0;width:144px;display:flex;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s ease}
 .swipe-row.dragging .swipe-actions,.swipe-row.swiped .swipe-actions{opacity:1;visibility:visible;pointer-events:auto}
-.swipe-action{width:72px;border:0;color:#fff;font-size:12px;font-weight:600}
+.swipe-action{width:72px;border:0;border-radius:999px;color:#fff;font-size:12px;font-weight:600}
 .swipe-edit{background:#77736c}.swipe-delete{background:#b5483d}
 
-body:not(.list-view):not(.saved-view) .swipe-actions{display:none}
-body:not(.list-view):not(.saved-view) .swipe-row{overflow:visible}
-body:not(.list-view):not(.saved-view) .swipe-row .shop-card{transform:none!important}
+body:not(.list-view) .swipe-actions{display:none}
+body:not(.list-view) .swipe-row{overflow:visible}
+body:not(.list-view) .swipe-row .shop-card{transform:none!important}
 
 .edit-place-dialog{z-index:80}.edit-place-dialog form{padding:24px}.edit-place-dialog::backdrop{background:rgba(15,14,12,.42);backdrop-filter:blur(3px)}
 
 @media(hover:hover) and (pointer:fine){
-  body.list-view.admin-enabled .swipe-row:hover .shop-card,
-  body.saved-view.admin-enabled .swipe-row:hover .shop-card{transform:translateX(-144px)}
-  body.list-view.admin-enabled .swipe-row:hover .swipe-actions,
-  body.saved-view.admin-enabled .swipe-row:hover .swipe-actions{opacity:1;visibility:visible;pointer-events:auto}
+  body.list-view.admin-enabled .swipe-row:hover .shop-card{transform:translateX(-144px)}
+  body.list-view.admin-enabled .swipe-row:hover .swipe-actions{opacity:1;visibility:visible;pointer-events:auto}
 }

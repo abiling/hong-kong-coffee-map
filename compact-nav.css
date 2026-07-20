@@ -40,7 +40,7 @@
     width: 56px;
     height: 56px;
     border: 1px solid rgba(23,23,19,.1);
-    border-radius: 50%;
+    border-radius: 999px;
     background: rgba(250,249,245,.96);
     box-shadow: 0 14px 38px rgba(20,18,14,.16);
     backdrop-filter: blur(24px);
@@ -70,8 +70,7 @@
   .map-fab.locate-fab { bottom: calc(var(--nav-height) + var(--safe-bottom) + 86px); }
   .maplibregl-ctrl-bottom-left { bottom: calc(var(--nav-height) + var(--safe-bottom) + 28px); }
 
-  body.list-view .list-panel,
-  body.saved-view .list-panel {
+  body.list-view .list-panel {
     bottom: calc(var(--nav-height) + var(--safe-bottom) + 22px);
   }
 
@@ -126,7 +125,7 @@
     width: 32px;
     height: 32px;
     border: 0;
-    border-radius: 50%;
+    border-radius: 999px;
     background: #efede7;
     font-size: 20px;
     color: var(--muted);
