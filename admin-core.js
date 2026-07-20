@@ -185,7 +185,8 @@
         <form id="editPlaceForm" method="dialog">
           <div class="dialog-head"><div><p class="list-kicker">Edit Place</p><h2>编辑咖啡店</h2></div><button type="button" id="closeEditDialog" class="sheet-close">×</button></div>
           <div class="form-grid">
-            <label class="full primary-input"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required /></label>
+            <label class="full primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required /></label>
+            <label class="full primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" disabled /></label>
             <label><span>店铺名称 *</span><input name="name" required /></label>
             <label><span>具体地区 *</span><input name="district" required /></label>
             <label><span>大区 *</span><input name="region" required /></label>
@@ -210,7 +211,7 @@
     if (!shop) return showToast('找不到这个地点');
     const form = $('#editPlaceForm');
     form.dataset.shopId = shop.id;
-    const fields = ['google_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'status', 'source', 'notes'];
+    const fields = ['google_maps', 'apple_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'status', 'source', 'notes', 'city', 'country'];
     fields.forEach(field => {
       if (form.elements[field]) form.elements[field].value = shop[field] ?? '';
     });
@@ -225,8 +226,9 @@
     data.id = form.dataset.shopId;
     data.latitude = Number(data.latitude);
     data.longitude = Number(data.longitude);
-    data.apple_maps = '';
     data.active = true;
+    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
+    if (!data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写当前城市指定的有效地图链接');
     button.disabled = true;
     button.textContent = '正在保存…';
     try {

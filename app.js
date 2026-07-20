@@ -75,6 +75,7 @@
   function normalizeShop(raw) {
     return {
       id: String(raw.id || ''), name: String(raw.name || ''), address: String(raw.address || ''),
+      city: String(raw.city || window.CoffeeMapCities?.activeCity || 'Hong Kong'), country: String(raw.country || ''),
       region: String(raw.region || '待确认'), district: String(raw.district || '待确认'),
       latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
       appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''), status: String(raw.status || '想去'),
@@ -153,8 +154,11 @@
     $('#detailRegion').textContent = shop.region; $('#detailDistrict').textContent = shop.district;
     $('#detailName').textContent = shop.name; $('#detailAddress').textContent = shop.address;
     $('#detailNotes').textContent = shop.notes || ''; $('#detailNotes').classList.toggle('visible', Boolean(shop.notes));
-    $('#googleMapsButton').href = shop.googleMaps || googleSearchUrl(shop);
-    $('#appleMapsButton').href = shop.appleMaps || `https://maps.apple.com/?q=${encodeURIComponent(shop.name)}&ll=${shop.latitude},${shop.longitude}`;
+    const provider = window.CoffeeMapCities?.getMapProvider(shop.city) || 'google';
+    const mapUrl = provider === 'apple' ? shop.appleMaps : shop.googleMaps;
+    const validMapUrl = window.CoffeeMapCities?.validateMapUrl(provider, mapUrl) ?? Boolean(mapUrl);
+    setMapAction($('#googleMapsButton'), provider === 'google' && validMapUrl, shop.googleMaps);
+    setMapAction($('#appleMapsButton'), provider === 'apple' && validMapUrl, shop.appleMaps);
     $$('.status-button').forEach(b => b.classList.toggle('active', b.dataset.status === shop.status));
     openSheet(els.detailSheet);
   }
@@ -188,8 +192,8 @@
     $('#locateButton').addEventListener('click', () => navigator.geolocation?.getCurrentPosition(p => map?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14.5 }), () => showToast('无法取得当前位置'), { enableHighAccuracy: true, timeout: 8000 }));
     $('#addButton').addEventListener('click', () => { resetAddForm(); els.addDialog.showModal(); });
     $('#closeAddDialog').addEventListener('click', () => els.addDialog.close());
-    els.parseButton.addEventListener('click', parseGoogleMapsLink);
-    els.addForm.elements.google_maps.addEventListener('input', () => { els.parseState.textContent = '链接已更改，请重新解析'; els.parseState.className = ''; });
+    els.parseButton.addEventListener('click', parsePlaceLink);
+    ['google_maps', 'apple_maps'].forEach(field => els.addForm.elements[field]?.addEventListener('input', markPlaceLinkChanged));
     els.addForm.addEventListener('submit', saveNewShop);
     $('#useMapCenter').addEventListener('click', () => { if (!map) return; const c = map.getCenter(); els.addForm.elements.latitude.value = c.lat.toFixed(7); els.addForm.elements.longitude.value = c.lng.toFixed(7); });
     $$('.status-button').forEach(b => b.addEventListener('click', () => updateStatus(b.dataset.status)));
@@ -200,16 +204,22 @@
     $('#saveAdminKeyButton').addEventListener('click', () => { const v = els.adminKeyInput.value.trim(); if (!v) return showToast('请输入管理员密钥'); localStorage.setItem(ADMIN_KEY_STORAGE, v); renderAdminKeyState(); showToast('密钥已保存在本机'); });
     $('#clearAdminKeyButton').addEventListener('click', () => { localStorage.removeItem(ADMIN_KEY_STORAGE); renderAdminKeyState(); showToast('本机密钥已清除'); });
     $('#refreshButton').addEventListener('click', async () => { await loadCloudShops({ quiet: true }); closeSheet(els.menuSheet); });
-    $('#exportJsonButton').addEventListener('click', () => download('hong-kong-coffee-shops.json', JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), shops }, null, 2), 'application/json'));
+    $('#exportJsonButton').addEventListener('click', () => download('coffee-shops.json', JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), shops }, null, 2), 'application/json'));
     $('#exportCsvButton').addEventListener('click', exportCsv);
   }
 
-  async function parseGoogleMapsLink() {
-    const url = els.addForm.elements.google_maps.value.trim(); if (!url) return showToast('请先粘贴 Google Maps 链接');
+  async function parsePlaceLink() {
+    const city = els.addForm.elements.city?.value || window.CoffeeMapCities?.activeCity || 'Hong Kong';
+    const field = window.CoffeeMapCities?.getMapField(city) || 'google_maps';
+    const provider = field === 'apple_maps' ? 'Apple Maps' : 'Google Maps';
+    const url = els.addForm.elements[field]?.value.trim();
+    if (!url) return showToast(`请先粘贴 ${provider} 链接`);
+    if (window.CoffeeMapCities && !window.CoffeeMapCities.validateMapUrl(field === 'apple_maps' ? 'apple' : 'google', url)) return showToast(`这不是有效的 ${provider} 商户链接`);
     els.parseButton.disabled = true; els.parseButton.textContent = '解析中…'; els.parseState.textContent = '正在解析地点…';
     try {
-      const { place } = await apiPost('parse', { google_maps: url });
-      ['google_maps','name','address','region','district','latitude','longitude','apple_maps','category','status','source','notes'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
+      const { place } = await apiPost('parse', { city, [field]: url });
+      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','status','source','notes','city','country'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
+      window.CoffeeMapCities?.syncForm(els.addForm, place?.city || city);
       els.parseState.textContent = '解析完成，请确认并按需修改'; els.parseState.className = 'success';
     } catch (error) { els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message); }
     finally { els.parseButton.disabled = false; els.parseButton.textContent = '解析地点'; }
@@ -219,7 +229,8 @@
     event.preventDefault(); const fd = new FormData(els.addForm);
     const data = Object.fromEntries([...fd.entries()].map(([k,v]) => [k, String(v).trim()]));
     data.latitude = Number(data.latitude); data.longitude = Number(data.longitude); data.active = true;
-    if (!data.google_maps || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
+    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
+    if (!data[mapRule.requiredField] || mapRule.valid === false || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
     els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
     try {
       const { shop } = await apiPost('add', data); const added = normalizeShop(shop); shops.push(added);
@@ -240,15 +251,30 @@
   function renderAdminKeyState() {
     const has = Boolean(localStorage.getItem(ADMIN_KEY_STORAGE)); els.adminKeyInput.value = ''; els.adminKeyInput.placeholder = has ? '已保存在本机' : '未设置'; $('#clearAdminKeyButton').disabled = !has;
   }
-  function resetAddForm() { els.addForm.reset(); els.addForm.elements.status.value = '想去'; els.parseState.textContent = '粘贴具体商户链接后解析'; els.parseState.className = ''; }
+  function resetAddForm() {
+    els.addForm.reset();
+    els.addForm.elements.status.value = '想去';
+    els.parseState.className = '';
+    window.CoffeeMapCities?.syncForm(els.addForm, window.CoffeeMapCities.activeCity);
+    const provider = els.addForm.dataset.mapProvider === 'apple' ? 'Apple Maps' : 'Google Maps';
+    els.parseState.textContent = `粘贴具体 ${provider} 商户链接后解析`;
+  }
   function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
-  function exportCsv() { const h = ['Name','District','Region','Address','Latitude','Longitude','Status','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.district,s.region,s.address,s.latitude,s.longitude,s.status,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('hong-kong-coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
+  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Status','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.status,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
   function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
   function closeSheet(el) { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
-  function googleSearchUrl(s) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${s.name} ${s.address}`)}`; }
+  function markPlaceLinkChanged() { els.parseState.textContent = '链接已更改，请重新解析'; els.parseState.className = ''; }
+  function setMapAction(button, shouldShow, href) {
+    if (!button) return;
+    const visible = Boolean(shouldShow && href);
+    button.hidden = !visible;
+    button.setAttribute('aria-hidden', String(!visible));
+    if (visible) button.href = href;
+    else button.removeAttribute('href');
+  }
   function normalize(v) { return String(v || '').trim().toLowerCase(); }
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }

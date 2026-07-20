@@ -1,6 +1,6 @@
-# Hong Kong Coffee Shops · Cloud Sync Edition
+# Coffee Shops Map · Cloud Sync Edition
 
-A mobile-first HTML5/PWA map for a personal collection of Hong Kong coffee shops.
+A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, Tokyo, and Beijing.
 
 ## Architecture
 
@@ -16,12 +16,14 @@ A mobile-first HTML5/PWA map for a personal collection of Hong Kong coffee shops
 - Search by shop name, address, district, region, notes or status
 - Region and district filters
 - Map, list and priority-saved views
-- Google Maps and Apple Maps links
+- City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
 - Cloud-synced status changes: 想去 / 优先去 / 去过
-- Add a shop by pasting a Google Maps link
+- Add a shop by pasting the map link required by its city
 - Automatic link parsing with editable fields before saving
 - JSON and CSV exports
 - iPhone safe-area layout and installable PWA
+
+The canonical city/provider policy and Apps Script validation contract are documented in [MAP_PROVIDER_RULES.md](MAP_PROVIDER_RULES.md).
 
 ## Security
 
