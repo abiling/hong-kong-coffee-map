@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v21-20260722-transit-station-filter';
+const CACHE = 'coffee-map-v22-20260722-transit-stop-fallback';
 const SHELL = [
   './', './index.html', './fonts.css?v=17', './styles.css?v=17', './admin.css?v=17',
   './filter-scroll.css?v=17', './compact-nav.css?v=17', './city-list-fix.css?v=17',
   './map-config.js?v=17', './multicity.js?v=17', './compact-search.js?v=17',
-  './app.js?v=21', './admin-core.js?v=17', './manifest.webmanifest',
+  './app.js?v=22', './admin-core.js?v=17', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
