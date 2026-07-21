@@ -1,6 +1,6 @@
 /* Administrator editing and swipe actions */
 .map-link-action{gap:9px}.map-link-action svg{width:19px;height:19px}.map-link-action .map-service-icon{fill:currentColor;stroke:none}
-.detail-actions{display:block}.detail-admin-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.admin-enabled .detail-admin-actions{display:grid}.admin-action{height:42px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px}.admin-action.delete-action{color:#a13d32;border-color:rgba(161,61,50,.25)}
+.detail-actions{display:block}.detail-admin-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.admin-enabled .detail-admin-actions{display:grid}.admin-action{height:var(--control-height);border-radius:var(--control-radius);border:1px solid var(--line);background:transparent;font-size:var(--button-font-size)}.admin-action.delete-action{color:#a13d32;border-color:rgba(161,61,50,.25)}
 
 /* Each row is a two-layer stack: opaque content above, actions below. */
 .swipe-row{position:relative;overflow:hidden;background:#faf9f5;border-radius:0}
@@ -18,7 +18,7 @@ body:not(.list-view):not(.saved-view) .swipe-actions{display:none}
 body:not(.list-view):not(.saved-view) .swipe-row{overflow:visible}
 body:not(.list-view):not(.saved-view) .swipe-row .shop-card{transform:none!important}
 
-.edit-place-dialog{z-index:80}.edit-place-dialog form{padding:24px}.edit-place-dialog::backdrop{background:rgba(15,14,12,.42);backdrop-filter:blur(3px)}
+.edit-place-dialog{z-index:80}
 
 @media(hover:hover) and (pointer:fine){
   body.list-view.admin-enabled .swipe-row:hover .shop-card,
