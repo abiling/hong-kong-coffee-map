@@ -281,15 +281,20 @@
   }
 
   function bindEvents() {
-    $('#regionFilters').addEventListener('click', e => {
-      const districtButton = e.target.closest('#districtButton');
-      if (districtButton) {
+    $('#regionFilters').addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('button') : null;
+      if (!button || !event.currentTarget.contains(button)) return;
+      if (button.id === 'districtButton') {
         renderDistricts();
         openSheet(els.districtSheet);
         return;
       }
-      const b = e.target.closest('[data-region]'); if (!b) return;
-      activeRegion = b.dataset.region; $('#regionFilters [data-region]').forEach(x => x.classList.toggle('active', x === b)); applyFilters({ fit: true });
+      if (!button.matches('[data-region]')) return;
+      activeRegion = button.dataset.region;
+      event.currentTarget.querySelectorAll('[data-region]').forEach(item => {
+        item.classList.toggle('active', item === button);
+      });
+      applyFilters({ fit: true });
     });
     window.addEventListener('coffee-map:city-change', switchCityView);
     window.addEventListener('coffee-map:shop-updated', event => applyShopUpdate(event.detail?.shop, event.detail?.previousCity));
@@ -474,5 +479,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=17').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=18').catch(() => {});
 })();
