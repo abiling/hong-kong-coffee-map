@@ -1,9 +1,10 @@
-const CACHE = 'coffee-map-v9-20260720-material-symbols';
+const CACHE = 'coffee-map-v10-20260721-brand-refresh';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
   './map-config.js', './multicity.js', './compact-search.js',
   './app.js', './admin-core.js', './manifest.webmanifest',
+  './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
 
