@@ -19,7 +19,7 @@
     cloudMeta: $('#cloudMeta'), adminKeyInput: $('#adminKeyInput'), parseButton: $('#parsePlaceButton'),
     parseState: $('#parseState'), savePlaceButton: $('#savePlaceButton')
   };
-  let cloudLoadInFlight = null;
+  const cloudLoads = new Map();
 
   window.CoffeeMapData = Object.freeze({
     load: getCloudPayload,
@@ -124,34 +124,37 @@
     }, city);
   }
 
-  async function getCloudPayload({ force = false } = {}) {
+  async function getCloudPayload({ force = false, city = activeCityName() } = {}) {
     if (!force) {
-      const cached = readCityCache();
+      const cached = readCityCache(city);
       if (cached) return cached;
     }
-    if (cloudLoadInFlight) return cloudLoadInFlight;
-    cloudLoadInFlight = (async () => {
-      const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
+    if (cloudLoads.has(city)) return cloudLoads.get(city);
+    const request = (async () => {
+      const query = new URLSearchParams({ action: 'list', city, _: String(Date.now()) });
+      const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
-      writeCityCache(payload);
+      writeCityCache(payload, city);
       return { ...payload, from_cache: false };
     })();
+    cloudLoads.set(city, request);
     try {
-      return await cloudLoadInFlight;
+      return await request;
     } finally {
-      cloudLoadInFlight = null;
+      if (cloudLoads.get(city) === request) cloudLoads.delete(city);
     }
   }
 
-  async function loadCloudShops({ fit = false, quiet = false, force = false } = {}) {
-    const hasCachedCity = !force && Boolean(readCityCache());
+  async function loadCloudShops({ fit = false, quiet = false, force = false, city = activeCityName() } = {}) {
+    const hasCachedCity = !force && Boolean(readCityCache(city));
     if (!hasCachedCity) {
       setCloudState('syncing', '正在同步', '正在读取 Google Sheets');
       if (!quiet) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
     }
     try {
-      const payload = await getCloudPayload({ force });
+      const payload = await getCloudPayload({ force, city });
+      if (activeCityName() !== city) return;
       shops = payload.shops.map(normalizeShop).filter(s => s.active && s.id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
       const meta = payload.from_cache
         ? `${shops.length} 家 · 本次会话缓存`
@@ -160,9 +163,12 @@
       renderDistricts();
       applyFilters({ fit });
     } catch (error) {
+      if (activeCityName() !== city) return;
       console.error(error);
       setCloudState('error', '云端连接失败', '请检查网络后重试');
-      els.allCount.textContent = els.resultCount.textContent = '—';
+      const allCount = $('#allCount');
+      if (allCount) allCount.textContent = '—';
+      els.resultCount.textContent = '—';
       els.list.innerHTML = '<div class="empty-state"><strong>无法读取云端数据</strong><br>请稍后重新同步。</div>';
       showToast('云端数据读取失败');
     }
@@ -218,7 +224,9 @@
   }
 
   function renderList() {
-    els.allCount.textContent = shops.length; els.resultCount.textContent = filtered.length;
+    const allCount = $('#allCount');
+    if (allCount) allCount.textContent = shops.length;
+    els.resultCount.textContent = filtered.length;
     if (!filtered.length) { els.list.innerHTML = `<div class="empty-state">${activeView === 'saved' ? '还没有收藏咖啡店' : '没有符合当前条件的咖啡店'}</div>`; return; }
     els.list.innerHTML = filtered.map(s => `<button class="shop-card" data-shop-id="${escapeHtml(s.id)}"><h3>${escapeHtml(s.name)}</h3><p><span class="area">${escapeHtml(s.district)}</span>${escapeHtml(s.address)}</p></button>`).join('');
     els.list.querySelectorAll('[data-shop-id]').forEach(card => card.addEventListener('click', () => selectShop(card.dataset.shopId, true)));
@@ -233,7 +241,7 @@
       const savedOK = activeView !== 'saved' || s.favorite;
       return regionOK && districtOK && searchOK && savedOK;
     });
-    renderList(); if (map?.loaded()) renderMarkers(); if (fit) fitTo(filtered, true);
+    renderList(); if (map) renderMarkers(); if (fit) fitTo(filtered, true);
   }
 
   function fitTo(items, animate = true) {
@@ -274,10 +282,18 @@
 
   function bindEvents() {
     $('#regionFilters').addEventListener('click', e => {
+      const districtButton = e.target.closest('#districtButton');
+      if (districtButton) {
+        renderDistricts();
+        openSheet(els.districtSheet);
+        return;
+      }
       const b = e.target.closest('[data-region]'); if (!b) return;
-      activeRegion = b.dataset.region; $$('#regionFilters [data-region]').forEach(x => x.classList.toggle('active', x === b)); applyFilters({ fit: true });
+      activeRegion = b.dataset.region; $('#regionFilters [data-region]').forEach(x => x.classList.toggle('active', x === b)); applyFilters({ fit: true });
     });
-    $('#districtButton').addEventListener('click', () => { renderDistricts(); openSheet(els.districtSheet); });
+    window.addEventListener('coffee-map:city-change', switchCityView);
+    window.addEventListener('coffee-map:shop-updated', event => applyShopUpdate(event.detail?.shop, event.detail?.previousCity));
+    window.addEventListener('coffee-map:shop-removed', event => removeShopFromView(event.detail?.id, event.detail?.city));
     els.search.addEventListener('input', () => { els.clearSearch.classList.toggle('visible', Boolean(els.search.value)); applyFilters(); });
     els.clearSearch.addEventListener('click', () => { els.search.value = ''; els.clearSearch.classList.remove('visible'); applyFilters({ fit: true }); });
     $('#fitButton').addEventListener('click', () => fitTo(filtered, true));
@@ -304,6 +320,61 @@
     $('#refreshButton').addEventListener('click', async () => { await loadCloudShops({ quiet: true, force: true }); closeSheet(els.menuSheet); });
     $('#exportJsonButton').addEventListener('click', () => download('coffee-shops.json', JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), shops }, null, 2), 'application/json'));
     $('#exportCsvButton').addEventListener('click', exportCsv);
+  }
+
+  async function switchCityView(event) {
+    const city = event.detail?.city || activeCityName();
+    const config = event.detail?.config || window.CoffeeMapCities?.cities?.[city];
+    activeRegion = '全部';
+    activeDistrict = '全部';
+    selectedId = null;
+    els.search.value = '';
+    els.clearSearch.classList.remove('visible');
+    closeSheet(els.detailSheet);
+    closeSheet(els.districtSheet);
+
+    if (map && config) {
+      map.stop();
+      map.easeTo({ center: config.center, zoom: config.zoom, duration: 420, essential: true });
+    }
+
+    if (!readCityCache(city)) {
+      shops = [];
+      filtered = [];
+      renderDistricts();
+      applyFilters();
+    }
+    await loadCloudShops({ fit: true, city });
+  }
+
+  function applyShopUpdate(rawShop, previousCity) {
+    if (!rawShop?.id) return;
+    const currentCity = activeCityName();
+    const updated = normalizeShop(rawShop);
+    const index = shops.findIndex(shop => shop.id === updated.id);
+    if (updated.city !== currentCity) {
+      if (index >= 0) shops.splice(index, 1);
+    } else if (index >= 0) {
+      shops[index] = updated;
+    } else {
+      shops.push(updated);
+    }
+    if (!previousCity || previousCity === currentCity || updated.city === currentCity) {
+      renderDistricts();
+      applyFilters();
+    }
+  }
+
+  function removeShopFromView(id, city = activeCityName()) {
+    if (!id || city !== activeCityName()) return;
+    const index = shops.findIndex(shop => shop.id === String(id));
+    if (index >= 0) shops.splice(index, 1);
+    if (selectedId === String(id)) {
+      selectedId = null;
+      closeSheet(els.detailSheet);
+    }
+    renderDistricts();
+    applyFilters();
   }
 
   async function parsePlaceLink() {
