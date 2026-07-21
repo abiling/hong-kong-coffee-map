@@ -1,9 +1,9 @@
 const CACHE = 'coffee-map-v17-20260722-spa-city-switch';
 const SHELL = [
-  './', './index.html', './fonts.css', './styles.css', './admin.css',
-  './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
-  './map-config.js', './multicity.js', './compact-search.js',
-  './app.js', './admin-core.js', './manifest.webmanifest',
+  './', './index.html', './fonts.css?v=17', './styles.css?v=17', './admin.css?v=17',
+  './filter-scroll.css?v=17', './compact-nav.css?v=17', './city-list-fix.css?v=17',
+  './map-config.js?v=17', './multicity.js?v=17', './compact-search.js?v=17',
+  './app.js?v=17', './admin-core.js?v=17', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
