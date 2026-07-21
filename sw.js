@@ -1,6 +1,6 @@
-const CACHE = 'coffee-map-v16-20260721-city-session-cache';
+const CACHE = 'coffee-map-v17-20260722-spa-city-switch';
 const SHELL = [
-  './', './index.html', './styles.css', './admin.css',
+  './', './index.html', './fonts.css', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
   './map-config.js', './multicity.js', './compact-search.js',
   './app.js', './admin-core.js', './manifest.webmanifest',
