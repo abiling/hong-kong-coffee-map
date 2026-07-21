@@ -8,7 +8,7 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 - Map: MapLibre GL JS + OpenFreeMap
 - Cloud database: Google Sheets
 - API: Google Apps Script Web App
-- Local browser storage: administrator key only; shop data is never stored locally
+- Local browser storage: the administrator key uses localStorage; each city's shop list uses sessionStorage and is cleared when the tab session ends
 
 ## Current features
 
