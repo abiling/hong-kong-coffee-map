@@ -115,19 +115,8 @@
       const stationFilter = [
         'all',
         ['==', ['geometry-type'], 'Point'],
-        ['match', ['get', 'class'], ['rail', 'railway'], true, false],
         ['has', 'name'],
-        ['any',
-          ['match', ['get', 'subclass'], ['station', 'halt'], true, false],
-          ['all',
-            ['match', ['get', 'subclass'], ['subway', 'tram_stop'], true, false],
-            ['any',
-              ['==', ['get', 'agg_stop'], 1],
-              ['==', ['get', 'agg_stop'], '1'],
-              ['!', ['has', 'agg_stop']]
-            ]
-          ]
-        ]
+        ['match', ['get', 'subclass'], ['station', 'halt', 'subway', 'tram_stop', 'light_rail', 'monorail'], true, false]
       ];
       const publicBuildingFilter = [
         'all',
@@ -147,15 +136,14 @@
         type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
-        minzoom: 13,
+        minzoom: 10,
         filter: stationFilter,
         layout: {
           'icon-image': stationIconId,
           'icon-size': 0.75,
           'icon-padding': 1,
-          'icon-allow-overlap': false,
-          'icon-ignore-placement': true,
-          'symbol-sort-key': ['coalesce', ['get', 'rank'], 999]
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
         }
       }, beforeRoadLabels);
 
@@ -185,7 +173,7 @@
         type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
-        minzoom: 13,
+        minzoom: 10,
         filter: stationFilter,
         layout: {
           'text-field': localName,
@@ -643,5 +631,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=22').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=23').catch(() => {});
 })();
