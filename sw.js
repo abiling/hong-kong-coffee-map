@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v15-20260721-icon-render-fix';
+const CACHE = 'coffee-map-v16-20260721-city-session-cache';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
