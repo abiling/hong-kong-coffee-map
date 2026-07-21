@@ -147,9 +147,14 @@
     <form id="addForm" method="dialog">
       <div class="dialog-head"><div><p id="dialogKicker" class="list-kicker">New Place</p><h2 id="dialogTitle">添加咖啡店</h2></div><button type="button" id="closeAddDialog" class="sheet-close" aria-label="关闭"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button></div>
       <div class="form-grid">
-        <label class="full primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required placeholder="https://maps.app.goo.gl/…" /></label>
-        <label class="full primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" placeholder="https://maps.apple.com/place?…" disabled /></label>
-        <div class="full parse-row"><button type="button" id="parsePlaceButton" class="parse-button">解析地点</button><span id="parseState">粘贴具体商户链接后解析</span></div>
+        <div class="full map-parse-group">
+          <div class="map-parse-row">
+            <label class="primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required placeholder="https://maps.app.goo.gl/…" /></label>
+            <label class="primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" placeholder="https://maps.apple.com/place?…" disabled /></label>
+            <button type="button" id="parsePlaceButton" class="parse-button">解析地点</button>
+          </div>
+          <span id="parseState" class="parse-state">粘贴具体商户链接后解析</span>
+        </div>
         <label><span>店铺名称 *</span><input name="name" required /></label>
         <label><span>具体地区 *</span><input name="district" required placeholder="例如：上环" /></label>
         <label><span>大区 *</span><input name="region" required placeholder="港岛 / 九龙 / 新界 / 离岛" /></label>
@@ -160,8 +165,10 @@
         <label><span>来源链接</span><input name="source" type="url" placeholder="Instagram / 小红书等" /></label>
         <label class="full"><span>备注</span><textarea name="notes" rows="3" placeholder="推荐饮品、营业提醒……"></textarea></label>
       </div>
-      <button type="button" id="useMapCenter" class="center-button">使用当前地图中心坐标</button>
-      <button type="submit" id="savePlaceButton" class="primary-action dialog-submit">保存到云端地图</button>
+      <div class="dialog-actions">
+        <button type="button" id="useMapCenter" class="center-button">使用当前位置坐标</button>
+        <button type="submit" id="savePlaceButton" class="primary-action dialog-submit">保存到云端</button>
+      </div>
     </form>
   </dialog>
 
