@@ -48,13 +48,64 @@
     document.fonts?.ready.then(update).catch(() => {});
   }
 
+  function createTrainStationIcon() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const roundedRect = (x, y, width, height, radius) => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    };
+
+    roundedRect(4, 4, 56, 56, 14);
+    ctx.fillStyle = '#5f605e';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(248, 247, 243, 0.96)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.fillStyle = '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    roundedRect(20, 12, 24, 34, 6);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(22, 29);
+    ctx.lineTo(42, 29);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(26, 40, 2.25, 0, Math.PI * 2);
+    ctx.arc(38, 40, 2.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(25, 47);
+    ctx.lineTo(21, 52);
+    ctx.moveTo(39, 47);
+    ctx.lineTo(43, 52);
+    ctx.stroke();
+
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }
+
   function installMapContextLayers() {
-    if (!map || map.getLayer('coffee-map-transit-core')) return;
+    if (!map || map.getLayer('coffee-map-transit-station-labels')) return;
 
     try {
       const styleLayers = map.getStyle()?.layers || [];
-      const vectorLayer = styleLayers.find(layer => layer['source-layer'] === 'transportation')
-        || styleLayers.find(layer => layer['source-layer'] === 'poi');
+      const vectorLayer = styleLayers.find(layer => layer['source-layer'] === 'poi')
+        || styleLayers.find(layer => layer['source-layer'] === 'transportation');
       const sourceId = vectorLayer?.source || 'openmaptiles';
       if (!map.getSource(sourceId)) return;
 
@@ -64,14 +115,6 @@
         if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId && map.getLayer(beforeId) ? beforeId : undefined);
       };
       const localName = ['coalesce', ['get', 'name:nonlatin'], ['get', 'name'], ['get', 'name:latin'], ['get', 'name_en']];
-      const transitFilter = [
-        'all',
-        ['==', ['geometry-type'], 'LineString'],
-        ['any',
-          ['==', ['get', 'class'], 'transit'],
-          ['match', ['get', 'subclass'], ['subway', 'light_rail', 'monorail', 'tram'], true, false]
-        ]
-      ];
       const stationFilter = [
         'all',
         ['==', ['geometry-type'], 'Point'],
@@ -89,49 +132,20 @@
         ]
       ];
 
-      addLayer({
-        id: 'coffee-map-transit-casing',
-        type: 'line',
-        source: sourceId,
-        'source-layer': 'transportation',
-        minzoom: 9,
-        filter: transitFilter,
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': 'rgba(255, 255, 255, 0.94)',
-          'line-opacity': 0.92,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 3, 14, 4.8, 18, 7]
-        }
-      }, beforeRoadLabels);
-
-      addLayer({
-        id: 'coffee-map-transit-core',
-        type: 'line',
-        source: sourceId,
-        'source-layer': 'transportation',
-        minzoom: 9,
-        filter: transitFilter,
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': '#8b5e3c',
-          'line-opacity': 0.82,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.2, 14, 2.4, 18, 4.2]
-        }
-      }, beforeRoadLabels);
+      const stationIconId = 'coffee-map-train-station-icon';
+      if (!map.hasImage(stationIconId)) map.addImage(stationIconId, createTrainStationIcon(), { pixelRatio: 2 });
 
       addLayer({
         id: 'coffee-map-transit-stations',
-        type: 'circle',
+        type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
         minzoom: 10,
         filter: stationFilter,
-        paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 14, 4, 17, 5],
-          'circle-color': '#fffdfa',
-          'circle-stroke-color': '#8b5e3c',
-          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 10, 1.3, 16, 2],
-          'circle-opacity': 0.96
+        layout: {
+          'icon-image': stationIconId,
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.68, 14, 0.88, 17, 1],
+          'icon-padding': 2
         }
       }, beforeRoadLabels);
 
@@ -161,14 +175,14 @@
         type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
-        minzoom: 11,
+        minzoom: 10,
         filter: stationFilter,
         layout: {
           'text-field': localName,
           'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 11, 10, 14, 11.5, 17, 13],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 11.5, 17, 13],
           'text-anchor': 'left',
-          'text-offset': [0.8, 0],
+          'text-offset': [1.45, 0],
           'text-max-width': 9,
           'text-padding': 3
         },
@@ -618,5 +632,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=19').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=20').catch(() => {});
 })();
