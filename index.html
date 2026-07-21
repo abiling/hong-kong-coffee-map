@@ -11,9 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="fonts.css" />
   <link rel="preconnect" href="https://tiles.openfreemap.org" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -40,7 +38,21 @@
       <div class="brand-row">
         <div class="brand-copy">
           <img class="brand-mark" src="icons/mark-cafe-shops.svg" width="76" height="20" alt="Cafe Shops" />
-          <h1>Hong Kong</h1>
+          <button id="cityButton" class="city-title-button" type="button" aria-haspopup="dialog" aria-controls="citySheet">
+            <span data-city-label>Hong Kong</span>
+            <span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>
+          </button>
+          <script>
+            (() => {
+              try {
+                const city = localStorage.getItem('coffee-map-active-city-v1');
+                if (!['Hong Kong', 'Tokyo', 'Beijing'].includes(city)) return;
+                document.querySelector('[data-city-label]').textContent = city;
+                document.documentElement.dataset.city = city.toLowerCase().replace(/\s+/g, '-');
+                document.title = city + ' · Coffee Shops';
+              } catch (_) {}
+            })();
+          </script>
         </div>
         <div class="brand-actions">
           <span id="syncIndicator" class="sync-indicator syncing">正在同步</span>
