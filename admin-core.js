@@ -239,12 +239,18 @@
     button.disabled = true;
     button.textContent = '正在保存…';
     try {
+      const previousCity = shopIndex.get(String(data.id))?.city || window.CoffeeMapCities?.activeCity;
       const payload = await post('update', data);
       shopIndex.set(String(payload.shop.id), payload.shop);
+      if (previousCity && previousCity !== payload.shop.city) {
+        window.CoffeeMapData?.remove(String(payload.shop.id), previousCity);
+      }
       window.CoffeeMapData?.upsert(payload.shop);
       $('#editPlaceDialog').close();
+      window.dispatchEvent(new CustomEvent('coffee-map:shop-updated', {
+        detail: { shop: payload.shop, previousCity }
+      }));
       showToast('地点资料已更新');
-      setTimeout(() => location.reload(), 500);
     } catch (error) {
       showToast(error.message);
     } finally {
@@ -258,10 +264,14 @@
     if (!shop) return showToast('找不到这个地点');
     if (!confirm(`确定删除“${shop.name}”吗？\n\n该地点会从地图隐藏，但仍可在 Google Sheet 中将 active 改回 TRUE 恢复。`)) return;
     try {
+      const city = String(shop.city || window.CoffeeMapCities?.activeCity || 'Hong Kong');
       await post('archive', { id: String(id) });
-      window.CoffeeMapData?.remove(String(id));
+      shopIndex.delete(String(id));
+      window.CoffeeMapData?.remove(String(id), city);
+      window.dispatchEvent(new CustomEvent('coffee-map:shop-removed', {
+        detail: { id: String(id), city }
+      }));
       showToast('地点已删除');
-      setTimeout(() => location.reload(), 500);
     } catch (error) {
       showToast(error.message);
     }
@@ -282,6 +292,10 @@
   }
 
   function bindSettingsEvents() {
+    window.addEventListener('coffee-map:city-change', () => {
+      closeSwipeRows();
+      refreshShopIndex();
+    });
     $('#refreshButton')?.addEventListener('click', () => refreshShopIndex({ force: true }));
     $('#saveAdminKeyButton')?.addEventListener('click', () => setTimeout(() => {
       enhanceRows();
