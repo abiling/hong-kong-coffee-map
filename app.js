@@ -141,8 +141,8 @@
         layout: {
           'icon-image': stationIconId,
           'icon-size': 0.75,
-          'icon-padding': 1,
-          'icon-allow-overlap': true,
+          'icon-padding': 5,
+          'icon-allow-overlap': false,
           'icon-ignore-placement': true
         }
       }, beforeRoadLabels);
@@ -631,5 +631,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=23').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=24').catch(() => {});
 })();
