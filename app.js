@@ -238,9 +238,9 @@
     els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
     try {
       const { shop } = await apiPost('add', data); const added = normalizeShop(shop); shops.push(added);
-      renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端地图');
+      renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端');
     } catch (error) { showToast(error.message); }
-    finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端地图'; }
+    finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端'; }
   }
 
   async function toggleFavorite() {
