@@ -197,7 +197,9 @@
             <label><span>来源链接</span><input name="source" type="url" /></label>
             <label class="full"><span>备注</span><textarea name="notes" rows="3"></textarea></label>
           </div>
-          <button type="submit" id="saveEditButton" class="primary-action dialog-submit">保存修改</button>
+          <div class="dialog-actions single-action">
+            <button type="submit" id="saveEditButton" class="primary-action dialog-submit">保存修改</button>
+          </div>
         </form>
       </dialog>`);
     $('#closeEditDialog').addEventListener('click', () => $('#editPlaceDialog').close());
