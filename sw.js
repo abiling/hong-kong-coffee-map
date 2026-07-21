@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v11-20260721-brand-scale';
+const CACHE = 'coffee-map-v12-20260721-title-scale';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
