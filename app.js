@@ -138,7 +138,7 @@
         layout: {
           'icon-image': stationIconId,
           'icon-size': 0.67,
-          'icon-padding': 5,
+          'icon-padding': 9,
           'icon-allow-overlap': false,
           'icon-ignore-placement': true
         }
@@ -180,7 +180,7 @@
           'text-radial-offset': 1.15,
           'text-justify': 'auto',
           'text-max-width': 9,
-          'text-padding': 2
+          'text-padding': 4
         },
         paint: {
           'text-color': '#574a3e',
@@ -628,5 +628,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=25').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=26').catch(() => {});
 })();
