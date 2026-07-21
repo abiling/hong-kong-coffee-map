@@ -15,7 +15,7 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 - Cloud loading of all coffee shops
 - Search by shop name, address, district, region or notes
 - Region and district filters
-- Metro, tram, light-rail and railway stations use compact embedded train icons from zoom 13; grouped primary stops prevent platform/entrance duplicates, transit lines stay hidden, and only important public-building POIs are shown
+- Metro, tram, light-rail and railway stations use compact embedded train icons from zoom 13; grouped primary stops are preferred when the tile provides aggregation metadata, with collision-based fallback for tiles that omit it, transit lines stay hidden, and only important public-building POIs are shown
 - Map, list and favorites views
 - City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
 - Cloud-synced favorites
