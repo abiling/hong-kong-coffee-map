@@ -13,17 +13,21 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 ## Current features
 
 - Cloud loading of all coffee shops
-- Search by shop name, address, district, region, notes or status
+- Search by shop name, address, district, region or notes
 - Region and district filters
-- Map, list and priority-saved views
+- Map, list and favorites views
 - City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
-- Cloud-synced status changes: 想去 / 优先去 / 去过
+- Cloud-synced favorites
 - Add a shop by pasting the map link required by its city
 - Automatic link parsing with editable fields before saving
 - JSON and CSV exports
 - iPhone safe-area layout and installable PWA
 
 The canonical city/provider policy and Apps Script validation contract are documented in [MAP_PROVIDER_RULES.md](MAP_PROVIDER_RULES.md).
+
+## Repository hygiene
+
+The deployed app is fully static. Temporary extraction data belongs in `tmp/`, which is ignored by Git, and one-off data collection scripts are not part of the production repository.
 
 ## Security
 
