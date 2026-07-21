@@ -64,18 +64,15 @@
     };
 
     roundedRect(2.5, 2.5, 43, 43, 10);
-    ctx.fillStyle = '#5f605e';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(248, 247, 243, 0.98)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    roundedRect(14, 8, 20, 27, 5);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
+    roundedRect(14, 8, 20, 27, 5);
+    ctx.fillStyle = '#666864';
+    ctx.fill();
+
     roundedRect(17, 12, 14, 8, 2);
-    ctx.fillStyle = '#5f605e';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
 
     ctx.beginPath();
@@ -83,7 +80,7 @@
     ctx.arc(29, 30, 1.8, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = '#666864';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -140,7 +137,7 @@
         filter: stationFilter,
         layout: {
           'icon-image': stationIconId,
-          'icon-size': 0.75,
+          'icon-size': 0.67,
           'icon-padding': 5,
           'icon-allow-overlap': false,
           'icon-ignore-placement': true
@@ -631,5 +628,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=24').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=25').catch(() => {});
 })();
