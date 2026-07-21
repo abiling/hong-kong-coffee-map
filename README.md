@@ -16,6 +16,7 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 - Search by shop name, address, district, region or notes
 - Region and district filters
 - Only important public-building POIs are shown; ordinary commercial POIs remain hidden
+- Neutral 3D building extrusion on the Positron basemap
 - Map, list and favorites views
 - City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
 - Cloud-synced favorites
