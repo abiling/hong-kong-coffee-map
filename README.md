@@ -15,6 +15,7 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 - Cloud loading of all coffee shops
 - Search by shop name, address, district, region or notes
 - Region and district filters
+- Emphasized subway and rail lines with station labels; only important public-building POIs are shown
 - Map, list and favorites views
 - City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
 - Cloud-synced favorites
