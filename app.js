@@ -48,53 +48,8 @@
     document.fonts?.ready.then(update).catch(() => {});
   }
 
-  function createTrainStationIcon() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 48;
-    canvas.height = 48;
-    const ctx = canvas.getContext('2d');
-    const roundedRect = (x, y, width, height, radius) => {
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.arcTo(x + width, y, x + width, y + height, radius);
-      ctx.arcTo(x + width, y + height, x, y + height, radius);
-      ctx.arcTo(x, y + height, x, y, radius);
-      ctx.arcTo(x, y, x + width, y, radius);
-      ctx.closePath();
-    };
-
-    roundedRect(2.5, 2.5, 43, 43, 10);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-
-    roundedRect(14, 8, 20, 27, 5);
-    ctx.fillStyle = '#666864';
-    ctx.fill();
-
-    roundedRect(17, 12, 14, 8, 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(19, 30, 1.8, 0, Math.PI * 2);
-    ctx.arc(29, 30, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#666864';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(18, 36);
-    ctx.lineTo(14.5, 40);
-    ctx.moveTo(30, 36);
-    ctx.lineTo(33.5, 40);
-    ctx.stroke();
-
-    return ctx.getImageData(0, 0, canvas.width, canvas.height);
-  }
-
   function installMapContextLayers() {
-    if (!map || map.getLayer('coffee-map-transit-station-labels')) return;
+    if (!map || map.getLayer('coffee-map-public-building-labels')) return;
 
     try {
       const styleLayers = map.getStyle()?.layers || [];
@@ -103,18 +58,7 @@
       const sourceId = vectorLayer?.source || 'openmaptiles';
       if (!map.getSource(sourceId)) return;
 
-      const beforeAnyLabels = styleLayers.find(layer => layer.type === 'symbol')?.id;
       const beforePlaceLabels = map.getLayer('place_other') ? 'place_other' : undefined;
-      const addLayer = (layer, beforeId) => {
-        if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId && map.getLayer(beforeId) ? beforeId : undefined);
-      };
-      const localName = ['coalesce', ['get', 'name:nonlatin'], ['get', 'name'], ['get', 'name:latin'], ['get', 'name_en']];
-      const stationFilter = [
-        'all',
-        ['==', ['geometry-type'], 'Point'],
-        ['has', 'name'],
-        ['match', ['get', 'subclass'], ['station', 'halt', 'subway', 'tram_stop', 'light_rail', 'monorail'], true, false]
-      ];
       const publicBuildingFilter = [
         'all',
         ['==', ['geometry-type'], 'Point'],
@@ -124,27 +68,9 @@
           ['match', ['get', 'subclass'], ['university', 'museum', 'courthouse', 'government', 'community_centre', 'arts_centre', 'opera_house', 'concert_hall', 'monument', 'memorial'], true, false]
         ]
       ];
+      const localName = ['coalesce', ['get', 'name:nonlatin'], ['get', 'name'], ['get', 'name:latin'], ['get', 'name_en']];
 
-      const stationIconId = 'coffee-map-train-station-icon';
-      if (!map.hasImage(stationIconId)) map.addImage(stationIconId, createTrainStationIcon(), { pixelRatio: 2 });
-
-      addLayer({
-        id: 'coffee-map-transit-stations',
-        type: 'symbol',
-        source: sourceId,
-        'source-layer': 'poi',
-        minzoom: 10,
-        filter: stationFilter,
-        layout: {
-          'icon-image': stationIconId,
-          'icon-size': 0.67,
-          'icon-padding': 9,
-          'icon-allow-overlap': false,
-          'icon-ignore-placement': true
-        }
-      }, beforeAnyLabels);
-
-      addLayer({
+      map.addLayer({
         id: 'coffee-map-public-building-labels',
         type: 'symbol',
         source: sourceId,
@@ -163,31 +89,7 @@
           'text-halo-color': 'rgba(255, 255, 255, 0.94)',
           'text-halo-width': 1.2
         }
-      }, beforePlaceLabels);
-
-      addLayer({
-        id: 'coffee-map-transit-station-labels',
-        type: 'symbol',
-        source: sourceId,
-        'source-layer': 'poi',
-        minzoom: 10,
-        filter: stationFilter,
-        layout: {
-          'text-field': localName,
-          'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 14, 11, 17, 12.5],
-          'text-variable-anchor': ['left', 'right', 'top', 'bottom'],
-          'text-radial-offset': 1.15,
-          'text-justify': 'auto',
-          'text-max-width': 9,
-          'text-padding': 4
-        },
-        paint: {
-          'text-color': '#574a3e',
-          'text-halo-color': 'rgba(255, 255, 255, 0.96)',
-          'text-halo-width': 1.5
-        }
-      });
+      }, beforePlaceLabels && map.getLayer(beforePlaceLabels) ? beforePlaceLabels : undefined);
     } catch (error) {
       console.warn('Map context layers could not be installed.', error);
     }
@@ -628,5 +530,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=27').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=28').catch(() => {});
 })();
