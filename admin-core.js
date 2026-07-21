@@ -23,10 +23,15 @@
     enhanceRows();
   }
 
-  async function refreshShopIndex() {
+  async function refreshShopIndex({ force = false } = {}) {
     try {
-      const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
-      const payload = await response.json();
+      let payload;
+      if (window.CoffeeMapData?.load) {
+        payload = await window.CoffeeMapData.load({ force });
+      } else {
+        const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
+        payload = await response.json();
+      }
       if (!payload.ok || !Array.isArray(payload.shops)) return;
       shopIndex = new Map(payload.shops.filter(shop => shop.active !== false).map(shop => [String(shop.id), shop]));
     } catch (error) {
@@ -236,6 +241,7 @@
     try {
       const payload = await post('update', data);
       shopIndex.set(String(payload.shop.id), payload.shop);
+      window.CoffeeMapData?.upsert(payload.shop);
       $('#editPlaceDialog').close();
       showToast('地点资料已更新');
       setTimeout(() => location.reload(), 500);
@@ -253,6 +259,7 @@
     if (!confirm(`确定删除“${shop.name}”吗？\n\n该地点会从地图隐藏，但仍可在 Google Sheet 中将 active 改回 TRUE 恢复。`)) return;
     try {
       await post('archive', { id: String(id) });
+      window.CoffeeMapData?.remove(String(id));
       showToast('地点已删除');
       setTimeout(() => location.reload(), 500);
     } catch (error) {
@@ -275,6 +282,7 @@
   }
 
   function bindSettingsEvents() {
+    $('#refreshButton')?.addEventListener('click', () => refreshShopIndex({ force: true }));
     $('#saveAdminKeyButton')?.addEventListener('click', () => setTimeout(() => {
       enhanceRows();
       refreshShopIndex();
