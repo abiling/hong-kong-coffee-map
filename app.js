@@ -95,43 +95,6 @@
     }
   }
 
-  function install3DBuildings() {
-    if (!map || map.getLayer('coffee-map-3d-buildings')) return;
-
-    try {
-      const styleLayers = map.getStyle()?.layers || [];
-      const buildingLayer = styleLayers.find(layer => layer['source-layer'] === 'building');
-      const sourceId = buildingLayer?.source || 'openmaptiles';
-      if (!map.getSource(sourceId)) return;
-
-      const firstLabelLayer = styleLayers.find(layer => layer.type === 'symbol' && layer.layout?.['text-field'])?.id;
-      map.addLayer({
-        id: 'coffee-map-3d-buildings',
-        type: 'fill-extrusion',
-        source: sourceId,
-        'source-layer': 'building',
-        minzoom: 14,
-        filter: ['!=', ['get', 'hide_3d'], true],
-        paint: {
-          'fill-extrusion-color': '#d8d5cf',
-          'fill-extrusion-height': [
-            'interpolate', ['linear'], ['zoom'],
-            14, 0,
-            15, ['coalesce', ['get', 'render_height'], 8]
-          ],
-          'fill-extrusion-base': [
-            'interpolate', ['linear'], ['zoom'],
-            14, 0,
-            15, ['coalesce', ['get', 'render_min_height'], 0]
-          ],
-          'fill-extrusion-opacity': 0.82
-        }
-      }, firstLabelLayer);
-    } catch (error) {
-      console.warn('3D buildings could not be installed.', error);
-    }
-  }
-
   function initMap() {
     if (!window.maplibregl) {
       $('#map').innerHTML = '<div class="map-error"><strong>地图未能载入</strong><span>请检查网络连接。</span></div>';
@@ -139,13 +102,11 @@
     }
     map = new maplibregl.Map({
       container: 'map', style: 'https://tiles.openfreemap.org/styles/positron', center: DEFAULT_CENTER,
-      zoom: 11.25, minZoom: 9, maxZoom: 19, pitch: 42, bearing: -12, maxPitch: 60,
-      attributionControl: false, canvasContextAttributes: { antialias: true }
+      zoom: 11.25, minZoom: 9, maxZoom: 19, attributionControl: false
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('load', () => {
-      install3DBuildings();
       installMapContextLayers();
       renderMarkers();
       if (filtered.length) fitTo(filtered, false);
@@ -569,5 +530,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=29').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=30').catch(() => {});
 })();
