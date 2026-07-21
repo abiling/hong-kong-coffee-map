@@ -50,8 +50,8 @@
 
   function createTrainStationIcon() {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 48;
+    canvas.height = 48;
     const ctx = canvas.getContext('2d');
     const roundedRect = (x, y, width, height, radius) => {
       ctx.beginPath();
@@ -63,37 +63,34 @@
       ctx.closePath();
     };
 
-    roundedRect(4, 4, 56, 56, 14);
+    roundedRect(2.5, 2.5, 43, 43, 10);
     ctx.fillStyle = '#5f605e';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(248, 247, 243, 0.96)';
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(248, 247, 243, 0.98)';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.strokeStyle = '#ffffff';
+    roundedRect(14, 8, 20, 27, 5);
     ctx.fillStyle = '#ffffff';
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.fill();
 
-    roundedRect(20, 12, 24, 34, 6);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(22, 29);
-    ctx.lineTo(42, 29);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(26, 40, 2.25, 0, Math.PI * 2);
-    ctx.arc(38, 40, 2.25, 0, Math.PI * 2);
+    roundedRect(17, 12, 14, 8, 2);
+    ctx.fillStyle = '#5f605e';
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(25, 47);
-    ctx.lineTo(21, 52);
-    ctx.moveTo(39, 47);
-    ctx.lineTo(43, 52);
+    ctx.arc(19, 30, 1.8, 0, Math.PI * 2);
+    ctx.arc(29, 30, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(18, 36);
+    ctx.lineTo(14.5, 40);
+    ctx.moveTo(30, 36);
+    ctx.lineTo(33.5, 40);
     ctx.stroke();
 
     return ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -120,7 +117,13 @@
         ['==', ['geometry-type'], 'Point'],
         ['match', ['get', 'class'], ['rail', 'railway'], true, false],
         ['has', 'name'],
-        ['match', ['get', 'subclass'], ['subway_entrance', 'entrance'], false, true]
+        ['any',
+          ['match', ['get', 'subclass'], ['station', 'halt'], true, false],
+          ['all',
+            ['match', ['get', 'subclass'], ['subway', 'tram_stop'], true, false],
+            ['==', ['get', 'agg_stop'], 1]
+          ]
+        ]
       ];
       const publicBuildingFilter = [
         'all',
@@ -140,12 +143,14 @@
         type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
-        minzoom: 10,
+        minzoom: 13,
         filter: stationFilter,
         layout: {
           'icon-image': stationIconId,
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.68, 14, 0.88, 17, 1],
-          'icon-padding': 2
+          'icon-size': 0.75,
+          'icon-padding': 1,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
         }
       }, beforeRoadLabels);
 
@@ -175,16 +180,17 @@
         type: 'symbol',
         source: sourceId,
         'source-layer': 'poi',
-        minzoom: 10,
+        minzoom: 13,
         filter: stationFilter,
         layout: {
           'text-field': localName,
           'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 11.5, 17, 13],
-          'text-anchor': 'left',
-          'text-offset': [1.45, 0],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 14, 11, 17, 12.5],
+          'text-variable-anchor': ['left', 'right', 'top', 'bottom'],
+          'text-radial-offset': 1.15,
+          'text-justify': 'auto',
           'text-max-width': 9,
-          'text-padding': 3
+          'text-padding': 2
         },
         paint: {
           'text-color': '#574a3e',
@@ -632,5 +638,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=20').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=21').catch(() => {});
 })();
