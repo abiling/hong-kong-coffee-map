@@ -48,6 +48,141 @@
     document.fonts?.ready.then(update).catch(() => {});
   }
 
+  function installMapContextLayers() {
+    if (!map || map.getLayer('coffee-map-transit-core')) return;
+
+    try {
+      const styleLayers = map.getStyle()?.layers || [];
+      const vectorLayer = styleLayers.find(layer => layer['source-layer'] === 'transportation')
+        || styleLayers.find(layer => layer['source-layer'] === 'poi');
+      const sourceId = vectorLayer?.source || 'openmaptiles';
+      if (!map.getSource(sourceId)) return;
+
+      const beforeRoadLabels = map.getLayer('highway_name_other') ? 'highway_name_other' : undefined;
+      const beforePlaceLabels = map.getLayer('place_other') ? 'place_other' : undefined;
+      const addLayer = (layer, beforeId) => {
+        if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId && map.getLayer(beforeId) ? beforeId : undefined);
+      };
+      const localName = ['coalesce', ['get', 'name:nonlatin'], ['get', 'name'], ['get', 'name:latin'], ['get', 'name_en']];
+      const transitFilter = [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['any',
+          ['==', ['get', 'class'], 'transit'],
+          ['match', ['get', 'subclass'], ['subway', 'light_rail', 'monorail', 'tram'], true, false]
+        ]
+      ];
+      const stationFilter = [
+        'all',
+        ['==', ['geometry-type'], 'Point'],
+        ['match', ['get', 'class'], ['rail', 'railway'], true, false],
+        ['has', 'name'],
+        ['match', ['get', 'subclass'], ['subway_entrance', 'entrance'], false, true]
+      ];
+      const publicBuildingFilter = [
+        'all',
+        ['==', ['geometry-type'], 'Point'],
+        ['has', 'name'],
+        ['any',
+          ['match', ['get', 'class'], ['town_hall', 'library', 'college', 'hospital', 'stadium', 'art_gallery', 'castle'], true, false],
+          ['match', ['get', 'subclass'], ['university', 'museum', 'courthouse', 'government', 'community_centre', 'arts_centre', 'opera_house', 'concert_hall', 'monument', 'memorial'], true, false]
+        ]
+      ];
+
+      addLayer({
+        id: 'coffee-map-transit-casing',
+        type: 'line',
+        source: sourceId,
+        'source-layer': 'transportation',
+        minzoom: 9,
+        filter: transitFilter,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': 'rgba(255, 255, 255, 0.94)',
+          'line-opacity': 0.92,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 3, 14, 4.8, 18, 7]
+        }
+      }, beforeRoadLabels);
+
+      addLayer({
+        id: 'coffee-map-transit-core',
+        type: 'line',
+        source: sourceId,
+        'source-layer': 'transportation',
+        minzoom: 9,
+        filter: transitFilter,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#8b5e3c',
+          'line-opacity': 0.82,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.2, 14, 2.4, 18, 4.2]
+        }
+      }, beforeRoadLabels);
+
+      addLayer({
+        id: 'coffee-map-transit-stations',
+        type: 'circle',
+        source: sourceId,
+        'source-layer': 'poi',
+        minzoom: 10,
+        filter: stationFilter,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 14, 4, 17, 5],
+          'circle-color': '#fffdfa',
+          'circle-stroke-color': '#8b5e3c',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 10, 1.3, 16, 2],
+          'circle-opacity': 0.96
+        }
+      }, beforeRoadLabels);
+
+      addLayer({
+        id: 'coffee-map-public-building-labels',
+        type: 'symbol',
+        source: sourceId,
+        'source-layer': 'poi',
+        minzoom: 13.5,
+        filter: publicBuildingFilter,
+        layout: {
+          'text-field': localName,
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 13.5, 10, 17, 12],
+          'text-max-width': 9,
+          'text-padding': 4
+        },
+        paint: {
+          'text-color': '#747169',
+          'text-halo-color': 'rgba(255, 255, 255, 0.94)',
+          'text-halo-width': 1.2
+        }
+      }, beforePlaceLabels);
+
+      addLayer({
+        id: 'coffee-map-transit-station-labels',
+        type: 'symbol',
+        source: sourceId,
+        'source-layer': 'poi',
+        minzoom: 11,
+        filter: stationFilter,
+        layout: {
+          'text-field': localName,
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 11, 10, 14, 11.5, 17, 13],
+          'text-anchor': 'left',
+          'text-offset': [0.8, 0],
+          'text-max-width': 9,
+          'text-padding': 3
+        },
+        paint: {
+          'text-color': '#574a3e',
+          'text-halo-color': 'rgba(255, 255, 255, 0.96)',
+          'text-halo-width': 1.5
+        }
+      });
+    } catch (error) {
+      console.warn('Map context layers could not be installed.', error);
+    }
+  }
+
   function initMap() {
     if (!window.maplibregl) {
       $('#map').innerHTML = '<div class="map-error"><strong>地图未能载入</strong><span>请检查网络连接。</span></div>';
@@ -59,7 +194,11 @@
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-    map.on('load', () => { renderMarkers(); if (filtered.length) fitTo(filtered, false); });
+    map.on('load', () => {
+      installMapContextLayers();
+      renderMarkers();
+      if (filtered.length) fitTo(filtered, false);
+    });
   }
 
   function activeCityName() {
@@ -479,5 +618,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=18').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=19').catch(() => {});
 })();
