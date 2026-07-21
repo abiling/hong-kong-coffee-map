@@ -26,11 +26,12 @@
   });
 
   const storedCity = localStorage.getItem(CITY_STORAGE_KEY);
-  const activeCity = CITIES[storedCity] ? storedCity : 'Hong Kong';
-  const activeConfig = CITIES[activeCity];
+  let activeCity = CITIES[storedCity] ? storedCity : 'Hong Kong';
+  let activeConfig = CITIES[activeCity];
 
   window.CoffeeMapCities = Object.freeze({
-    activeCity,
+    get activeCity() { return activeCity; },
+    get activeConfig() { return activeConfig; },
     cities: CITIES,
     providers: PROVIDERS,
     getMapProvider,
@@ -38,11 +39,7 @@
     validateMapUrl,
     syncForm: syncFormLocation,
     applyMapProviderRule,
-    setActiveCity(city) {
-      if (!CITIES[city]) return;
-      localStorage.setItem(CITY_STORAGE_KEY, city);
-      location.reload();
-    }
+    setActiveCity
   });
 
   patchMapDefaults();
@@ -102,10 +99,15 @@
       const response = await nativeFetch(...args);
       const requestUrl = String(args[0]?.url || args[0] || '');
       if (!requestUrl.includes(API_MARKER)) return response;
+      let responseCity = activeCity;
+      try {
+        const requestedCity = new URL(requestUrl, window.location.href).searchParams.get('city');
+        if (CITIES[requestedCity]) responseCity = requestedCity;
+      } catch (_) {}
       try {
         const payload = await response.clone().json();
         if (Array.isArray(payload.shops)) {
-          payload.shops = payload.shops.map(normalizeLocationFields).filter(shop => shop.city === activeCity);
+          payload.shops = payload.shops.map(normalizeLocationFields).filter(shop => shop.city === responseCity);
           payload.count = payload.shops.length;
         }
         if (payload.place) payload.place = normalizeLocationFields(payload.place);
@@ -167,31 +169,68 @@
     return Boolean(region && CITIES[city]?.regions.includes(String(region)));
   }
 
+  function setActiveCity(city) {
+    if (!CITIES[city]) return;
+    const sheet = document.querySelector('#citySheet');
+    if (city === activeCity) {
+      if (sheet) closeSheet(sheet);
+      return;
+    }
+    activeCity = city;
+    activeConfig = CITIES[city];
+    localStorage.setItem(CITY_STORAGE_KEY, city);
+    syncCitySelector();
+    renderRegionRail();
+    updateDocumentMetadata();
+    if (sheet) closeSheet(sheet);
+    window.dispatchEvent(new CustomEvent('coffee-map:city-change', {
+      detail: { city, config: activeConfig }
+    }));
+  }
+
   function installCitySelector() {
-    const heading = document.querySelector('.brand-row h1');
-    if (!heading) return;
-    const button = document.createElement('button');
-    button.id = 'cityButton';
-    button.className = 'city-title-button';
-    button.type = 'button';
+    let button = document.querySelector('#cityButton');
+    if (!button) {
+      const heading = document.querySelector('.brand-row h1');
+      if (!heading) return;
+      button = document.createElement('button');
+      button.id = 'cityButton';
+      button.className = 'city-title-button';
+      button.type = 'button';
+      button.innerHTML = '<span data-city-label></span><span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>';
+      heading.replaceWith(button);
+    }
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-controls', 'citySheet');
-    button.innerHTML = `<span data-city-label>${escapeHtml(activeConfig.label)}</span><span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>`;
-    heading.replaceWith(button);
 
     const sheet = document.createElement('div');
     sheet.id = 'citySheet';
     sheet.className = 'sheet';
     sheet.setAttribute('aria-hidden', 'true');
-    sheet.innerHTML = `<div class="sheet-backdrop" data-close-city></div><article class="sheet-card compact-card city-sheet-card"><div class="sheet-grabber"></div><div class="sheet-title-row"><div><p class="list-kicker">Cities</p><h2>选择城市</h2></div><button class="sheet-close" type="button" data-close-city aria-label="关闭"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button></div><div id="cityList" class="city-list">${Object.keys(CITIES).map(city => `<button class="city-option${city === activeCity ? ' active' : ''}" type="button" data-city="${escapeHtml(city)}"><span><strong>${escapeHtml(CITIES[city].label)}</strong><small>${escapeHtml(CITIES[city].country)}</small></span><b aria-hidden="true">${city === activeCity ? '<svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-check"/></svg>' : ''}</b></button>`).join('')}</div></article>`;
+    sheet.innerHTML = `<div class="sheet-backdrop" data-close-city></div><article class="sheet-card compact-card city-sheet-card"><div class="sheet-grabber"></div><div class="sheet-title-row"><div><p class="list-kicker">Cities</p><h2>选择城市</h2></div><button class="sheet-close" type="button" data-close-city aria-label="关闭"><svg class="material-symbol" viewBox="0 0 960 960" aria-hidden="true"><use href="#ms-close"/></svg></button></div><div id="cityList" class="city-list">${Object.keys(CITIES).map(city => `<button class="city-option" type="button" data-city="${escapeHtml(city)}"><span><strong>${escapeHtml(CITIES[city].label)}</strong><small>${escapeHtml(CITIES[city].country)}</small></span><b aria-hidden="true"></b></button>`).join('')}</div></article>`;
     document.body.appendChild(sheet);
+    syncCitySelector();
+
     button.addEventListener('click', () => openSheet(sheet));
     sheet.querySelectorAll('[data-close-city]').forEach(node => node.addEventListener('click', () => closeSheet(sheet)));
     sheet.querySelector('#cityList')?.addEventListener('click', event => {
       const option = event.target.closest('[data-city]');
-      if (!option || !CITIES[option.dataset.city]) return;
-      localStorage.setItem(CITY_STORAGE_KEY, option.dataset.city);
-      location.reload();
+      if (!option) return;
+      setActiveCity(option.dataset.city);
+    });
+  }
+
+  function syncCitySelector() {
+    const label = document.querySelector('[data-city-label]');
+    if (label) label.textContent = activeConfig.label;
+    document.querySelectorAll('#cityList [data-city]').forEach(option => {
+      const selected = option.dataset.city === activeCity;
+      option.classList.toggle('active', selected);
+      option.setAttribute('aria-current', selected ? 'true' : 'false');
+      const mark = option.querySelector('b');
+      if (mark) mark.innerHTML = selected
+        ? '<svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-check"/></svg>'
+        : '';
     });
   }
 
