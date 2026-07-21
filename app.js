@@ -103,7 +103,7 @@
       const sourceId = vectorLayer?.source || 'openmaptiles';
       if (!map.getSource(sourceId)) return;
 
-      const beforeRoadLabels = map.getLayer('highway_name_other') ? 'highway_name_other' : undefined;
+      const beforeAnyLabels = styleLayers.find(layer => layer.type === 'symbol')?.id;
       const beforePlaceLabels = map.getLayer('place_other') ? 'place_other' : undefined;
       const addLayer = (layer, beforeId) => {
         if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId && map.getLayer(beforeId) ? beforeId : undefined);
@@ -142,7 +142,7 @@
           'icon-allow-overlap': false,
           'icon-ignore-placement': true
         }
-      }, beforeRoadLabels);
+      }, beforeAnyLabels);
 
       addLayer({
         id: 'coffee-map-public-building-labels',
@@ -628,5 +628,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=26').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=27').catch(() => {});
 })();
