@@ -1,4 +1,4 @@
-const CACHE = 'coffee-map-v13-20260721-add-dialog-layout';
+const CACHE = 'coffee-map-v14-20260721-control-system';
 const SHELL = [
   './', './index.html', './styles.css', './admin.css',
   './filter-scroll.css', './compact-nav.css', './city-list-fix.css',
