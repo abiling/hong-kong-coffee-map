@@ -3,7 +3,7 @@
 
   const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const ADMIN_KEY_STORAGE = 'hk-coffee-admin-key-v2';
-  const CITY_DATA_CACHE_PREFIX = 'coffee-map-city-data-v1:';
+  const CITY_DATA_CACHE_PREFIX = 'coffee-map-city-data-v2:';
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
@@ -182,7 +182,8 @@
     }
     if (cloudLoads.has(city)) return cloudLoads.get(city);
     const request = (async () => {
-      const query = new URLSearchParams({ action: 'list', city, _: String(Date.now()) });
+      const countryCode = window.CoffeeMapCities?.cities?.[city]?.countryCode || '';
+      const query = new URLSearchParams({ action: 'list', country_code: countryCode, city, _: String(Date.now()) });
       const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
@@ -211,6 +212,7 @@
         ? `${shops.length} 家 · 本次会话缓存`
         : `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`;
       setCloudState('online', '云端已同步', meta);
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       renderDistricts();
       applyFilters({ fit });
     } catch (error) {
@@ -229,6 +231,7 @@
     return {
       id: String(raw.id || ''), name: String(raw.name || ''), address: String(raw.address || ''),
       city: String(raw.city || window.CoffeeMapCities?.activeCity || 'Hong Kong'), country: String(raw.country || ''),
+      country_code: String(raw.country_code || ''),
       region: String(raw.region || '待确认'), district: String(raw.district || '待确认'),
       latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
       appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''),
@@ -320,14 +323,55 @@
   }
 
   function renderDistricts() {
-    const counts = shops.reduce((a, s) => (a[s.district] = (a[s.district] || 0) + 1, a), {});
-    const districts = Object.keys(counts).sort((a, b) => a.localeCompare(b, 'zh-Hans'));
-    els.districtList.innerHTML = `<button class="district-option ${activeDistrict === '全部' ? 'active' : ''}" data-district="全部">全部地区</button>` + districts.map(d => `<button class="district-option ${activeDistrict === d ? 'active' : ''}" data-district="${escapeHtml(d)}">${escapeHtml(d)} · ${counts[d]}</button>`).join('');
-    els.districtList.querySelectorAll('[data-district]').forEach(b => b.addEventListener('click', () => {
-      activeDistrict = b.dataset.district;
-      $('#districtButton').classList.toggle('active', activeDistrict !== '全部');
-      $('#districtButton').firstChild.textContent = activeDistrict === '全部' ? '具体地区 ' : `${activeDistrict} `;
-      closeSheet(els.districtSheet); applyFilters({ fit: true }); renderDistricts();
+    const city = activeCityName();
+    const countryCode = window.CoffeeMapCities?.activeCountryCode;
+    const cities = window.CoffeeMapCities?.citiesForCountry(countryCode) || [city];
+    const actualRegions = new Set(shops.map(s => s.region).filter(Boolean));
+    const configuredRegions = window.CoffeeMapCities?.cities?.[city]?.regions || [];
+    const regions = configuredRegions.filter(region => actualRegions.has(region))
+      .concat([...actualRegions].filter(region => !configuredRegions.includes(region)).sort((a, b) => a.localeCompare(b, 'zh-Hans')));
+    const districts = [...new Set(shops.map(s => s.district).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hans'));
+    if (activeRegion !== '全部' && !regions.includes(activeRegion)) activeRegion = '全部';
+    if (activeDistrict !== '全部' && !districts.includes(activeDistrict)) activeDistrict = '全部';
+    window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
+    const cityOptions = cities.length > 1
+      ? `<section class="location-section"><h3>城市</h3><div class="district-grid">${cities.map(name => {
+        const config = window.CoffeeMapCities?.cities?.[name];
+        return `<button class="district-option${name === city ? ' active' : ''}" data-location-city="${escapeHtml(name)}">${escapeHtml(config?.localLabel || config?.label || name)}</button>`;
+      }).join('')}</div></section>`
+      : '';
+    const regionOptions = regions.length
+      ? `<section class="location-section"><h3>行政区／大区</h3><div class="district-grid">${regions.map(region => `<button class="district-option${activeRegion === region ? ' active' : ''}" data-location-region="${escapeHtml(region)}">${escapeHtml(region)}</button>`).join('')}</div></section>`
+      : '';
+    const districtOptions = districts.length
+      ? `<section class="location-section"><h3>具体地区</h3><div class="district-grid">${districts.map(district => `<button class="district-option${activeDistrict === district ? ' active' : ''}" data-district="${escapeHtml(district)}">${escapeHtml(district)}</button>`).join('')}</div></section>`
+      : '';
+    els.districtList.innerHTML = `<button class="district-option location-reset${activeRegion === '全部' && activeDistrict === '全部' ? ' active' : ''}" data-location-all="true">全部地区</button>${cityOptions}${regionOptions}${districtOptions}`;
+
+    els.districtList.querySelector('[data-location-all]')?.addEventListener('click', () => {
+      activeRegion = '全部';
+      activeDistrict = '全部';
+      closeSheet(els.districtSheet);
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
+      applyFilters({ fit: true });
+    });
+    els.districtList.querySelectorAll('[data-location-city]').forEach(button => button.addEventListener('click', () => {
+      window.CoffeeMapCities?.setActiveCity(button.dataset.locationCity);
+      closeSheet(els.districtSheet);
+    }));
+    els.districtList.querySelectorAll('[data-location-region]').forEach(button => button.addEventListener('click', () => {
+      activeRegion = button.dataset.locationRegion;
+      activeDistrict = '全部';
+      closeSheet(els.districtSheet);
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
+      applyFilters({ fit: true });
+    }));
+    els.districtList.querySelectorAll('[data-district]').forEach(button => button.addEventListener('click', () => {
+      activeRegion = '全部';
+      activeDistrict = button.dataset.district;
+      closeSheet(els.districtSheet);
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
+      applyFilters({ fit: true });
     }));
   }
 
@@ -342,9 +386,8 @@
       }
       if (!button.matches('[data-region]')) return;
       activeRegion = button.dataset.region;
-      event.currentTarget.querySelectorAll('[data-region]').forEach(item => {
-        item.classList.toggle('active', item === button);
-      });
+      activeDistrict = '全部';
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       applyFilters({ fit: true });
     });
     window.addEventListener('coffee-map:city-change', switchCityView);
@@ -397,6 +440,7 @@
     if (!readCityCache(city)) {
       shops = [];
       filtered = [];
+      window.CoffeeMapCities?.renderRegionRail([], activeRegion);
       renderDistricts();
       applyFilters();
     }
@@ -416,6 +460,7 @@
       shops.push(updated);
     }
     if (!previousCity || previousCity === currentCity || updated.city === currentCity) {
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       renderDistricts();
       applyFilters();
     }
@@ -430,6 +475,7 @@
       closeSheet(els.detailSheet);
     }
     renderDistricts();
+    window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
     applyFilters();
   }
 
@@ -442,8 +488,9 @@
     if (window.CoffeeMapCities && !window.CoffeeMapCities.validateMapUrl(field === 'apple_maps' ? 'apple' : 'google', url)) return showToast(`这不是有效的 ${provider} 商户链接`);
     els.parseButton.disabled = true; els.parseButton.textContent = '解析中…'; els.parseState.textContent = '正在解析地点…';
     try {
-      const { place } = await apiPost('parse', { city, [field]: url });
-      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','source','notes','city','country'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
+      const countryCode = window.CoffeeMapCities?.cities?.[city]?.countryCode || window.CoffeeMapCities?.activeCountryCode;
+      const { place } = await apiPost('parse', { city, country_code: countryCode, [field]: url });
+      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','source','notes','city','country','country_code'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
       window.CoffeeMapCities?.syncForm(els.addForm, place?.city || city);
       els.parseState.textContent = '解析完成，请确认并按需修改'; els.parseState.className = 'success';
     } catch (error) { els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message); }
@@ -462,6 +509,7 @@
     try {
       const { shop } = await apiPost('add', data); const added = normalizeShop(shop); shops.push(added);
       window.CoffeeMapData.upsert(shop);
+      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端');
     } catch (error) { showToast(error.message); }
     finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端'; }
@@ -511,7 +559,7 @@
   }
   function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
-  function exportCsv() { const h = ['Name','City','Country','District','Region','Address','Latitude','Longitude','Favorite','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.district,s.region,s.address,s.latitude,s.longitude,s.favorite,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
+  function exportCsv() { const h = ['Name','City','Country','Country Code','District','Region','Address','Latitude','Longitude','Favorite','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.country_code,s.district,s.region,s.address,s.latitude,s.longitude,s.favorite,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
   function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
@@ -530,5 +578,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=30').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=31').catch(() => {});
 })();

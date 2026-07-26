@@ -1,6 +1,6 @@
 # Coffee Shops Map · Cloud Sync Edition
 
-A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, Tokyo, and Beijing.
+A mobile-first HTML5/PWA map for personal coffee-shop collections organized by country/region, city and area.
 
 ## Architecture
 
@@ -8,16 +8,17 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections in Hong Kong, 
 - Map: MapLibre GL JS + OpenFreeMap
 - Cloud database: Google Sheets
 - API: Google Apps Script Web App
-- Local browser storage: the administrator key uses localStorage; each city's shop list uses sessionStorage and is cleared when the tab session ends
+- Local browser storage: the administrator key and active country/city use localStorage; each city's shop list uses sessionStorage and is cleared when the tab session ends
 
 ## Current features
 
 - Cloud loading of all coffee shops
 - Search by shop name, address, district, region or notes
-- Region and district filters
+- Country/region → city → area navigation
+- Dynamic area filters that only show areas containing shops
 - Only important public-building POIs are shown; ordinary commercial POIs remain hidden
 - Map, list and favorites views
-- City-specific merchant links: Google Maps for Hong Kong and Tokyo, Apple Maps for Beijing
+- Country-specific merchant links: Google Maps for Hong Kong SAR and Japan, Apple Maps for mainland China
 - Cloud-synced favorites
 - Add a shop by pasting the map link required by its city
 - Automatic link parsing with editable fields before saving

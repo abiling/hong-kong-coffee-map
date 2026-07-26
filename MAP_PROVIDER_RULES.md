@@ -16,7 +16,7 @@
 | Tokyo | Japan | Google Maps | `google_maps` | `apple_maps` |
 | Beijing | China | Apple Maps | `apple_maps` | `google_maps` |
 
-地图服务商由城市决定，不能根据设备、浏览器、操作系统或记录中碰巧存在的链接来推断。
+地图服务商由 `country_code` 决定，不能根据设备、浏览器、操作系统或记录中碰巧存在的链接来推断。当前映射为：`HK`、`JP` 使用 Google Maps；`CN` 使用 Apple Maps。
 
 ## 数据规则
 
@@ -47,6 +47,7 @@ Google example:
   "action": "parse",
   "data": {
     "city": "Tokyo",
+    "country_code": "JP",
     "google_maps": "https://maps.app.goo.gl/..."
   }
 }
@@ -59,18 +60,19 @@ Apple example:
   "action": "parse",
   "data": {
     "city": "Beijing",
+    "country_code": "CN",
     "apple_maps": "https://maps.apple.com/place?..."
   }
 }
 ```
 
-解析结果必须保留 `city`、`country`，并且只返回该城市允许的地图链接字段。
+解析结果必须保留 `city`、`country`、`country_code`，并且只返回该国家／地区允许的地图链接字段。
 
 ### Add and update
 
 写入 Google Sheets 前，服务端必须：
 
-1. 根据 `city` 确定地图服务商；
+1. 根据 `country_code` 确定地图服务商，并校验它与 `city` 一致；
 2. 校验必填链接；
 3. 拒绝缺失或服务商不匹配的链接；
 4. 将另一个地图字段设为 `""`；
@@ -79,18 +81,18 @@ Apple example:
 建议使用以下 Apps Script 写入保护函数：
 
 ```javascript
-const CITY_MAP_RULES = Object.freeze({
-  'Hong Kong': { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
-  Tokyo: { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
-  Beijing: { provider: 'apple', requiredField: 'apple_maps', blockedField: 'google_maps' }
+const COUNTRY_MAP_RULES = Object.freeze({
+  HK: { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
+  JP: { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
+  CN: { provider: 'apple', requiredField: 'apple_maps', blockedField: 'google_maps' }
 });
 
 function applyMapProviderRule_(record) {
-  const rule = CITY_MAP_RULES[String(record.city || '')];
-  if (!rule) throw new Error('Unsupported city');
+  const rule = COUNTRY_MAP_RULES[String(record.country_code || '').toUpperCase()];
+  if (!rule) throw new Error('Unsupported country/region');
 
   const url = String(record[rule.requiredField] || '').trim();
-  if (!url) throw new Error(rule.requiredField + ' is required for ' + record.city);
+  if (!url) throw new Error(rule.requiredField + ' is required for ' + record.country_code);
   validateProviderUrl_(rule.provider, url);
 
   record[rule.requiredField] = url;

@@ -217,7 +217,7 @@
     if (!shop) return showToast('找不到这个地点');
     const form = $('#editPlaceForm');
     form.dataset.shopId = shop.id;
-    const fields = ['google_maps', 'apple_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'source', 'notes', 'city', 'country'];
+    const fields = ['google_maps', 'apple_maps', 'name', 'address', 'region', 'district', 'latitude', 'longitude', 'category', 'source', 'notes', 'city', 'country', 'country_code'];
     fields.forEach(field => {
       if (form.elements[field]) form.elements[field].value = shop[field] ?? '';
     });
