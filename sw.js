@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v30-20260722-flat-positron';
+const CACHE = 'coffee-map-v31-20260726-country-city-region';
 const SHELL = [
-  './', './index.html', './fonts.css?v=17', './styles.css?v=17', './admin.css?v=17',
-  './filter-scroll.css?v=17', './compact-nav.css?v=17', './city-list-fix.css?v=17',
-  './map-config.js?v=17', './multicity.js?v=17', './compact-search.js?v=17',
-  './app.js?v=30', './admin-core.js?v=17', './manifest.webmanifest',
+  './', './index.html', './fonts.css?v=17', './styles.css?v=31', './admin.css?v=31',
+  './filter-scroll.css?v=31', './compact-nav.css?v=31', './city-list-fix.css?v=31',
+  './map-config.js?v=31', './multicity.js?v=31', './compact-search.js?v=31',
+  './app.js?v=31', './admin-core.js?v=31', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
