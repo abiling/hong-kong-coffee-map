@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v32-20260727-host-grotesk-area-counts';
+const CACHE = 'coffee-map-v33-20260727-normal-title-tracking';
 const SHELL = [
-  './', './index.html', './fonts.css?v=32', './styles.css?v=32', './admin.css?v=32',
-  './filter-scroll.css?v=32', './compact-nav.css?v=32', './city-list-fix.css?v=32',
-  './map-config.js?v=32', './multicity.js?v=32', './compact-search.js?v=32',
-  './app.js?v=32', './admin-core.js?v=32', './manifest.webmanifest',
+  './', './index.html', './fonts.css?v=33', './styles.css?v=33', './admin.css?v=33',
+  './filter-scroll.css?v=33', './compact-nav.css?v=33', './city-list-fix.css?v=33',
+  './map-config.js?v=33', './multicity.js?v=33', './compact-search.js?v=33',
+  './app.js?v=33', './admin-core.js?v=33', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
