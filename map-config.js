@@ -2,9 +2,9 @@
   'use strict';
 
   [
-    './filter-scroll.css?v=31',
-    './compact-nav.css?v=31',
-    './city-list-fix.css?v=31'
+    './filter-scroll.css?v=32',
+    './compact-nav.css?v=32',
+    './city-list-fix.css?v=32'
   ].forEach(href => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -23,7 +23,7 @@
   }
 
   if (!document.querySelector('script[data-multicity]')) {
-    const openTag = '<scr' + 'ipt src="./multicity.js?v=31" data-multicity="true">';
+    const openTag = '<scr' + 'ipt src="./multicity.js?v=32" data-multicity="true">';
     const closeTag = '</scr' + 'ipt>';
     document.write(openTag + closeTag);
   }
@@ -31,7 +31,7 @@
   window.addEventListener('load', () => {
     if (document.querySelector('script[data-compact-search]')) return;
     const script = document.createElement('script');
-    script.src = './compact-search.js?v=31';
+    script.src = './compact-search.js?v=32';
     script.dataset.compactSearch = 'true';
     document.body.appendChild(script);
   }, { once: true });

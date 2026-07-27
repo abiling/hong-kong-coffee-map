@@ -326,6 +326,14 @@
     const city = activeCityName();
     const countryCode = window.CoffeeMapCities?.activeCountryCode;
     const cities = window.CoffeeMapCities?.citiesForCountry(countryCode) || [city];
+    const regionCounts = shops.reduce((counts, shop) => {
+      if (shop.region) counts[shop.region] = (counts[shop.region] || 0) + 1;
+      return counts;
+    }, {});
+    const districtCounts = shops.reduce((counts, shop) => {
+      if (shop.district) counts[shop.district] = (counts[shop.district] || 0) + 1;
+      return counts;
+    }, {});
     const actualRegions = new Set(shops.map(s => s.region).filter(Boolean));
     const configuredRegions = window.CoffeeMapCities?.cities?.[city]?.regions || [];
     const regions = configuredRegions.filter(region => actualRegions.has(region))
@@ -341,10 +349,10 @@
       }).join('')}</div></section>`
       : '';
     const regionOptions = regions.length
-      ? `<section class="location-section"><h3>行政区／大区</h3><div class="district-grid">${regions.map(region => `<button class="district-option${activeRegion === region ? ' active' : ''}" data-location-region="${escapeHtml(region)}">${escapeHtml(region)}</button>`).join('')}</div></section>`
+      ? `<section class="location-section"><h3>行政区／大区</h3><div class="district-grid">${regions.map(region => `<button class="district-option${activeRegion === region ? ' active' : ''}" data-location-region="${escapeHtml(region)}">${escapeHtml(region)} <span class="district-count">${regionCounts[region] || 0}</span></button>`).join('')}</div></section>`
       : '';
     const districtOptions = districts.length
-      ? `<section class="location-section"><h3>具体地区</h3><div class="district-grid">${districts.map(district => `<button class="district-option${activeDistrict === district ? ' active' : ''}" data-district="${escapeHtml(district)}">${escapeHtml(district)}</button>`).join('')}</div></section>`
+      ? `<section class="location-section"><h3>具体地区</h3><div class="district-grid">${districts.map(district => `<button class="district-option${activeDistrict === district ? ' active' : ''}" data-district="${escapeHtml(district)}">${escapeHtml(district)} <span class="district-count">${districtCounts[district] || 0}</span></button>`).join('')}</div></section>`
       : '';
     els.districtList.innerHTML = `<button class="district-option location-reset${activeRegion === '全部' && activeDistrict === '全部' ? ' active' : ''}" data-location-all="true">全部地区</button>${cityOptions}${regionOptions}${districtOptions}`;
 
@@ -578,5 +586,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=31').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=32').catch(() => {});
 })();

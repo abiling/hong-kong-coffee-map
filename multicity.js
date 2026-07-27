@@ -10,7 +10,7 @@
     apple: Object.freeze({ field: 'apple_maps', label: 'Apple Maps', placeholder: 'https://maps.apple.com/place?…' })
   });
   const COUNTRIES = Object.freeze({
-    HK: Object.freeze({ label: 'Hong Kong SAR', localLabel: '香港特区', mapProvider: 'google' }),
+    HK: Object.freeze({ label: 'Hong Kong SAR', localLabel: '香港特别行政区', mapProvider: 'google' }),
     JP: Object.freeze({ label: 'Japan', localLabel: '日本', mapProvider: 'google' }),
     CN: Object.freeze({ label: 'China', localLabel: '中国', mapProvider: 'apple' })
   });
