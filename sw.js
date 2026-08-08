@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v34-20260727-search-ui-unification';
+const CACHE = 'coffee-map-v35-20260808-persistent-cloud-cache';
 const SHELL = [
-  './', './index.html', './fonts.css?v=34', './styles.css?v=34', './admin.css?v=34',
-  './filter-scroll.css?v=34', './compact-nav.css?v=34', './city-list-fix.css?v=34',
-  './map-config.js?v=34', './multicity.js?v=34', './compact-search.js?v=34',
-  './app.js?v=34', './admin-core.js?v=34', './manifest.webmanifest',
+  './', './index.html', './fonts.css?v=35', './styles.css?v=35', './admin.css?v=35',
+  './filter-scroll.css?v=35', './compact-nav.css?v=35', './city-list-fix.css?v=35',
+  './map-config.js?v=35', './multicity.js?v=35', './compact-search.js?v=35',
+  './app.js?v=35', './admin-core.js?v=35', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
