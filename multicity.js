@@ -114,15 +114,15 @@
       const response = await nativeFetch(...args);
       const requestUrl = String(args[0]?.url || args[0] || '');
       if (!requestUrl.includes(API_MARKER)) return response;
-      let responseCity = activeCity;
+      let requestedCity = '';
       try {
-        const requestedCity = new URL(requestUrl, window.location.href).searchParams.get('city');
-        if (CITIES[requestedCity]) responseCity = requestedCity;
+        requestedCity = new URL(requestUrl, window.location.href).searchParams.get('city') || '';
       } catch (_) {}
       try {
         const payload = await response.clone().json();
         if (Array.isArray(payload.shops)) {
-          payload.shops = payload.shops.map(normalizeLocationFields).filter(shop => shop.city === responseCity);
+          payload.shops = payload.shops.map(normalizeLocationFields);
+          if (CITIES[requestedCity]) payload.shops = payload.shops.filter(shop => shop.city === requestedCity);
           payload.count = payload.shops.length;
         }
         if (payload.place) payload.place = normalizeLocationFields(payload.place);
