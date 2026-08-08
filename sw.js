@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v35-20260808-persistent-cloud-cache';
+const CACHE = 'coffee-map-v36-20260808-user-location-marker';
 const SHELL = [
-  './', './index.html', './fonts.css?v=35', './styles.css?v=35', './admin.css?v=35',
-  './filter-scroll.css?v=35', './compact-nav.css?v=35', './city-list-fix.css?v=35',
-  './map-config.js?v=35', './multicity.js?v=35', './compact-search.js?v=35',
-  './app.js?v=35', './admin-core.js?v=35', './manifest.webmanifest',
+  './', './index.html', './fonts.css?v=36', './styles.css?v=36', './admin.css?v=36',
+  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36',
+  './map-config.js?v=36', './multicity.js?v=36', './compact-search.js?v=36',
+  './app.js?v=36', './admin-core.js?v=36', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];

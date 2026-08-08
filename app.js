@@ -8,7 +8,7 @@
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
-  let map = null, toastTimer = null;
+  let map = null, toastTimer = null, userLocationMarker = null;
   const markers = new Map();
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
@@ -116,6 +116,38 @@
 
   function activeCityName() {
     return window.CoffeeMapCities?.activeCity || 'Hong Kong';
+  }
+
+  function showUserLocation(position) {
+    if (!map || !window.maplibregl) return;
+    const coordinates = [position.coords.longitude, position.coords.latitude];
+    if (!userLocationMarker) {
+      const node = document.createElement('div');
+      node.className = 'user-location-marker';
+      node.setAttribute('aria-label', '当前位置');
+      node.innerHTML = '<span class="user-location-dot"></span>';
+      userLocationMarker = new maplibregl.Marker({ element: node, anchor: 'center' }).setLngLat(coordinates).addTo(map);
+    } else {
+      userLocationMarker.setLngLat(coordinates);
+    }
+    $('#locateButton')?.classList.add('active');
+    map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 14.5), essential: true });
+  }
+
+  function locateUser() {
+    const button = $('#locateButton');
+    if (!navigator.geolocation) return showToast('当前浏览器不支持定位');
+    button.disabled = true;
+    button.classList.add('locating');
+    navigator.geolocation.getCurrentPosition(position => {
+      showUserLocation(position);
+      button.disabled = false;
+      button.classList.remove('locating');
+    }, () => {
+      button.disabled = false;
+      button.classList.remove('locating');
+      showToast('无法取得当前位置');
+    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 });
   }
 
   function readAllDataCache() {
@@ -447,7 +479,7 @@
       document.body.classList.toggle('saved-view', activeView === 'saved');
       applyFilters(); setTimeout(() => map?.resize(), 80);
     }));
-    $('#locateButton').addEventListener('click', () => navigator.geolocation?.getCurrentPosition(p => map?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14.5 }), () => showToast('无法取得当前位置'), { enableHighAccuracy: true, timeout: 8000 }));
+    $('#locateButton').addEventListener('click', locateUser);
     $('#addButton').addEventListener('click', () => { resetAddForm(); els.addDialog.showModal(); });
     $('#closeAddDialog').addEventListener('click', () => els.addDialog.close());
     els.parseButton.addEventListener('click', parsePlaceLink);
@@ -623,5 +655,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=35').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=36').catch(() => {});
 })();
