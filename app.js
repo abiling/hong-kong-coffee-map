@@ -3,7 +3,8 @@
 
   const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const ADMIN_KEY_STORAGE = 'hk-coffee-admin-key-v2';
-  const CITY_DATA_CACHE_PREFIX = 'coffee-map-city-data-v2:';
+  const ALL_DATA_CACHE_KEY = 'coffee-map-all-data-v3';
+  const CLOUD_CACHE_TTL_MS = 15 * 60 * 1000;
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
@@ -117,106 +118,141 @@
     return window.CoffeeMapCities?.activeCity || 'Hong Kong';
   }
 
-  function cityCacheKey(city = activeCityName()) {
-    return `${CITY_DATA_CACHE_PREFIX}${city}`;
-  }
-
-  function readCityCache(city = activeCityName()) {
+  function readAllDataCache() {
     try {
-      const cached = JSON.parse(sessionStorage.getItem(cityCacheKey(city)) || 'null');
-      if (!cached || cached.city !== city || !Array.isArray(cached.shops)) return null;
-      return {
-        ok: true,
-        shops: cached.shops,
-        updated_at: cached.updated_at || cached.cached_at,
-        from_cache: true
-      };
+      const cached = JSON.parse(localStorage.getItem(ALL_DATA_CACHE_KEY) || 'null');
+      if (!cached || !Array.isArray(cached.shops)) return null;
+      return { ...cached, ok: true, from_cache: true };
     } catch (_) {
-      sessionStorage.removeItem(cityCacheKey(city));
+      localStorage.removeItem(ALL_DATA_CACHE_KEY);
       return null;
     }
   }
 
-  function writeCityCache(payload, city = activeCityName()) {
+  function writeAllDataCache(payload, cachedAt = new Date().toISOString()) {
     if (!payload || !Array.isArray(payload.shops)) return;
     try {
-      sessionStorage.setItem(cityCacheKey(city), JSON.stringify({
-        city,
+      localStorage.setItem(ALL_DATA_CACHE_KEY, JSON.stringify({
         shops: payload.shops,
         updated_at: payload.updated_at || new Date().toISOString(),
-        cached_at: new Date().toISOString()
+        cached_at: cachedAt
       }));
+      window.dispatchEvent(new CustomEvent('coffee-map:data-updated'));
     } catch (error) {
-      console.warn('City cache write failed:', error);
+      console.warn('Persistent cloud cache write failed:', error);
     }
   }
 
-  function invalidateCityCache(city = activeCityName()) {
-    sessionStorage.removeItem(cityCacheKey(city));
+  function cityPayloadFromAll(payload, city = activeCityName()) {
+    if (!payload || !Array.isArray(payload.shops)) return null;
+    return {
+      ok: true,
+      shops: payload.shops.filter(shop => String(shop.city || 'Hong Kong') === city),
+      updated_at: payload.updated_at || payload.cached_at,
+      cached_at: payload.cached_at,
+      from_cache: payload.from_cache !== false
+    };
+  }
+
+  function readCityCache(city = activeCityName()) {
+    return cityPayloadFromAll(readAllDataCache(), city);
+  }
+
+  function isCacheStale(payload) {
+    const cachedAt = Date.parse(payload?.cached_at || '');
+    return !Number.isFinite(cachedAt) || Date.now() - cachedAt >= CLOUD_CACHE_TTL_MS;
+  }
+
+  function invalidateCityCache() {
+    localStorage.removeItem(ALL_DATA_CACHE_KEY);
   }
 
   function upsertCachedShop(rawShop) {
     if (!rawShop?.id) return;
-    const city = String(rawShop.city || activeCityName());
-    const cached = readCityCache(city);
+    const cached = readAllDataCache();
     if (!cached) return;
-    const index = cached.shops.findIndex(shop => String(shop.id) === String(rawShop.id));
-    if (index >= 0) cached.shops[index] = rawShop;
-    else cached.shops.push(rawShop);
-    writeCityCache({ shops: cached.shops, updated_at: new Date().toISOString() }, city);
+    const nextShops = [...cached.shops];
+    const index = nextShops.findIndex(shop => String(shop.id) === String(rawShop.id));
+    if (index >= 0) nextShops[index] = rawShop;
+    else nextShops.push(rawShop);
+    writeAllDataCache({ shops: nextShops, updated_at: new Date().toISOString() }, cached.cached_at);
   }
 
-  function removeCachedShop(id, city = activeCityName()) {
-    const cached = readCityCache(city);
+  function removeCachedShop(id) {
+    const cached = readAllDataCache();
     if (!cached) return;
-    writeCityCache({
+    writeAllDataCache({
       shops: cached.shops.filter(shop => String(shop.id) !== String(id)),
       updated_at: new Date().toISOString()
-    }, city);
+    }, cached.cached_at);
   }
 
-  async function getCloudPayload({ force = false, city = activeCityName() } = {}) {
-    if (!force) {
-      const cached = readCityCache(city);
-      if (cached) return cached;
-    }
-    if (cloudLoads.has(city)) return cloudLoads.get(city);
+  async function fetchAllCloudPayload() {
+    const loadKey = 'all';
+    if (cloudLoads.has(loadKey)) return cloudLoads.get(loadKey);
     const request = (async () => {
-      const countryCode = window.CoffeeMapCities?.cities?.[city]?.countryCode || '';
-      const query = new URLSearchParams({ action: 'list', country_code: countryCode, city, _: String(Date.now()) });
+      const query = new URLSearchParams({ action: 'list', _: String(Date.now()) });
       const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
-      writeCityCache(payload, city);
-      return { ...payload, from_cache: false };
+      const cachedAt = new Date().toISOString();
+      writeAllDataCache(payload, cachedAt);
+      return { ...payload, cached_at: cachedAt, from_cache: false };
     })();
-    cloudLoads.set(city, request);
+    cloudLoads.set(loadKey, request);
     try {
       return await request;
     } finally {
-      if (cloudLoads.get(city) === request) cloudLoads.delete(city);
+      if (cloudLoads.get(loadKey) === request) cloudLoads.delete(loadKey);
     }
   }
 
+  async function getCloudPayload({ force = false, city = activeCityName() } = {}) {
+    const cached = readAllDataCache();
+    if (!force && cached) return cityPayloadFromAll(cached, city);
+    return cityPayloadFromAll(await fetchAllCloudPayload(), city);
+  }
+
+  function applyCloudPayload(payload, { fit = false } = {}) {
+    shops = payload.shops.map(normalizeShop).filter(s => s.active && s.id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+    const meta = payload.from_cache
+      ? `${shops.length} 家 · 本地缓存`
+      : `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`;
+    setCloudState('online', '云端已同步', meta);
+    window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
+    renderDistricts();
+    applyFilters({ fit });
+  }
+
+  function refreshAllInBackground(city) {
+    fetchAllCloudPayload().then(payload => {
+      if (activeCityName() !== city) return;
+      const cityPayload = cityPayloadFromAll(payload, city);
+      if (cityPayload) applyCloudPayload(cityPayload);
+    }).catch(error => {
+      console.warn('Background cloud refresh failed:', error);
+      if (activeCityName() === city) setCloudState('online', '使用本地缓存', `${shops.length} 家 · 云端更新稍后重试`);
+    });
+  }
+
   async function loadCloudShops({ fit = false, quiet = false, force = false, city = activeCityName() } = {}) {
-    const hasCachedCity = !force && Boolean(readCityCache(city));
-    if (!hasCachedCity) {
-      setCloudState('syncing', '正在同步', '正在读取 Google Sheets');
-      if (!quiet) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
+    const allCache = !force ? readAllDataCache() : null;
+    const cachedCity = allCache ? cityPayloadFromAll(allCache, city) : null;
+    if (cachedCity) {
+      if (activeCityName() === city) applyCloudPayload(cachedCity, { fit });
+      if (isCacheStale(allCache)) refreshAllInBackground(city);
+      return cachedCity;
     }
+
+    setCloudState('syncing', '正在同步', '正在读取 Google Sheets');
+    if (!quiet) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
     try {
-      const payload = await getCloudPayload({ force, city });
-      if (activeCityName() !== city) return;
-      shops = payload.shops.map(normalizeShop).filter(s => s.active && s.id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
-      const meta = payload.from_cache
-        ? `${shops.length} 家 · 本次会话缓存`
-        : `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`;
-      setCloudState('online', '云端已同步', meta);
-      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
-      renderDistricts();
-      applyFilters({ fit });
+      const payload = await getCloudPayload({ force: true, city });
+      if (activeCityName() !== city) return payload;
+      applyCloudPayload(payload, { fit });
+      return payload;
     } catch (error) {
-      if (activeCityName() !== city) return;
+      if (activeCityName() !== city) return null;
       console.error(error);
       setCloudState('error', '云端连接失败', '请检查网络后重试');
       const allCount = $('#allCount');
@@ -224,6 +260,7 @@
       els.resultCount.textContent = '—';
       els.list.innerHTML = '<div class="empty-state"><strong>无法读取云端数据</strong><br>请稍后重新同步。</div>';
       showToast('云端数据读取失败');
+      return null;
     }
   }
 
@@ -586,5 +623,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=34').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=35').catch(() => {});
 })();
