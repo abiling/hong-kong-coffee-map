@@ -50,8 +50,13 @@
 
   async function loadShops() {
     try {
-      const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
-      const payload = await response.json();
+      let payload;
+      if (window.CoffeeMapData?.load) {
+        payload = await window.CoffeeMapData.load();
+      } else {
+        const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
+        payload = await response.json();
+      }
       if (!payload.ok || !Array.isArray(payload.shops)) return;
       shops = payload.shops.filter(shop => shop.active !== false).map(shop => ({
         id: String(shop.id || ''),
@@ -69,6 +74,8 @@
   }
 
   function bindEvents() {
+    window.addEventListener('coffee-map:city-change', loadShops);
+    window.addEventListener('coffee-map:data-updated', loadShops);
     searchButton.addEventListener('click', openSearch);
     cancelButton.addEventListener('click', closeSearch);
     overlay.querySelector('.search-mode-backdrop').addEventListener('click', closeSearch);
