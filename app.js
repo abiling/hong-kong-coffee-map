@@ -8,7 +8,7 @@
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
-  let map = null, toastTimer = null, userLocationMarker = null;
+  let map = null, toastTimer = null, userLocationMarker = null, lastDataFitKey = '';
   const markers = new Map();
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
@@ -37,10 +37,16 @@
   loadCloudShops({ fit: true });
 
   function trackLayout() {
+    let lastContentTop;
     const update = () => {
       const bottom = els.topbar?.getBoundingClientRect().bottom || 170;
-      document.documentElement.style.setProperty('--content-top', `${Math.ceil(bottom + 8)}px`);
-      map?.resize();
+      const contentTop = `${Math.ceil(bottom + 8)}px`;
+      if (contentTop !== lastContentTop) {
+        document.documentElement.style.setProperty('--content-top', contentTop);
+        lastContentTop = contentTop;
+      }
+      // MapLibre 5.12 observes its own container (trackResize defaults to true).
+      // Header/font changes only move overlays; they do not resize #map.
     };
     update();
     window.addEventListener('resize', update, { passive: true });
@@ -107,10 +113,16 @@
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    map.on('movestart', event => {
+      if (event.originalEvent) lastDataFitKey = '';
+    });
     map.on('load', () => {
       installMapContextLayers();
-      renderMarkers();
-      if (filtered.length) fitTo(filtered, false);
+      // applyFilters renders DOM markers as soon as shop data arrives, including
+      // before style load. Rebuilding them here only discards identical nodes.
+      // Keep the load-time correction only when bounds or header padding changed.
+      // Otherwise an earlier cached-data fit is already the final viewport.
+      if (filtered.length) fitTo(filtered, false, { skipIfSame: true });
     });
   }
 
@@ -131,6 +143,7 @@
       userLocationMarker.setLngLat(coordinates);
     }
     $('#locateButton')?.classList.add('active');
+    lastDataFitKey = '';
     map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 14.5), essential: true });
   }
 
@@ -367,17 +380,32 @@
     renderList(); if (map) renderMarkers(); if (fit) fitTo(filtered, true);
   }
 
-  function fitTo(items, animate = true) {
+  function fitTo(items, animate = true, { skipIfSame = false } = {}) {
     if (!map || !items.length) return;
-    if (items.length === 1) return map.flyTo({ center: [items[0].longitude, items[0].latitude], zoom: 15.5, essential: true });
+    if (items.length === 1) {
+      const fitKey = `point:${items[0].longitude},${items[0].latitude}:15.5`;
+      if (skipIfSame && fitKey === lastDataFitKey && !map.isMoving()) return;
+      lastDataFitKey = fitKey;
+      return map.flyTo({ center: [items[0].longitude, items[0].latitude], zoom: 15.5, essential: true });
+    }
     const bounds = new maplibregl.LngLatBounds(); items.forEach(s => bounds.extend([s.longitude, s.latitude]));
-    map.fitBounds(bounds, { padding: { top: Math.max(190, (els.topbar?.getBoundingClientRect().bottom || 170) + 20), bottom: 120, left: 35, right: 35 }, maxZoom: 14, duration: animate ? 700 : 0 });
+    const padding = { top: Math.max(190, (els.topbar?.getBoundingClientRect().bottom || 170) + 20), bottom: 120, left: 35, right: 35 };
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const container = map.getContainer();
+    const fitKey = `bounds:${sw.lng},${sw.lat}:${ne.lng},${ne.lat}:${padding.top},${padding.bottom},${padding.left},${padding.right}:14:${container.clientWidth}x${container.clientHeight}`;
+    if (skipIfSame && fitKey === lastDataFitKey && !map.isMoving()) return;
+    lastDataFitKey = fitKey;
+    map.fitBounds(bounds, { padding, maxZoom: 14, duration: animate ? 700 : 0 });
   }
 
   function selectShop(id, moveMap) {
     const shop = shops.find(s => s.id === id); if (!shop) return;
     selectedId = id;
-    if (moveMap && map) map.flyTo({ center: [shop.longitude, shop.latitude], zoom: 15.6, offset: [0, -90], essential: true });
+    if (moveMap && map) {
+      lastDataFitKey = '';
+      map.flyTo({ center: [shop.longitude, shop.latitude], zoom: 15.6, offset: [0, -90], essential: true });
+    }
     markers.forEach((m, key) => m.getElement().querySelector('.coffee-marker')?.classList.toggle('selected', key === id));
     $('#detailRegion').textContent = shop.region; $('#detailDistrict').textContent = shop.district;
     $('#detailName').textContent = shop.name; $('#detailAddress').textContent = shop.address;
@@ -501,20 +529,24 @@
   async function switchCityView(event) {
     const city = event.detail?.city || activeCityName();
     const config = event.detail?.config || window.CoffeeMapCities?.cities?.[city];
+    const cachedCity = readCityCache(city);
+    const hasCachedShops = cachedCity?.shops?.some(shop => shop.active !== false
+      && Number.isFinite(Number(shop.latitude)) && Number.isFinite(Number(shop.longitude)));
     activeRegion = '全部';
     activeDistrict = '全部';
     selectedId = null;
+    lastDataFitKey = '';
     els.search.value = '';
     els.clearSearch.classList.remove('visible');
     closeSheet(els.detailSheet);
     closeSheet(els.districtSheet);
 
-    if (map && config) {
-      map.stop();
+    if (map) map.stop();
+    if (map && config && !hasCachedShops) {
       map.easeTo({ center: config.center, zoom: config.zoom, duration: 420, essential: true });
     }
 
-    if (!readCityCache(city)) {
+    if (!cachedCity) {
       shops = [];
       filtered = [];
       window.CoffeeMapCities?.renderRegionRail([], activeRegion);
@@ -655,5 +687,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=36').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=37').catch(() => {});
 })();

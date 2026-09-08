@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Coffee Shops local performance audit</title>
+<style>
+body{font:14px system-ui;margin:16px}button,select{margin:4px;padding:6px}iframe{display:block;border:1px solid #999;width:390px;height:844px}pre{white-space:pre-wrap;overflow-wrap:anywhere}main{display:flex;gap:16px}pre{flex:1;max-height:844px;overflow:auto}#note{max-width:1000px}
+</style>
+<h1>Local performance audit</h1>
+<p id="note">Same instrumentation for both versions; no telemetry. Mobile viewport does not emulate mobile hardware or memory. Request counts are MapLibre attempts, not proof of network transfers or cache misses. Zero transferSize can mean cached OR cross-origin timing restrictions. Use browser Network with Preserve log for aborts/failures and transferred bytes. Use the same viewport, cache state and data state in both versions; run at least three trials. For cold trials clear this localhost origin's site data and browser HTTP cache manually; never clear your production site's data.</p>
+<select id="variant"><option value="before">Before (v36)</option><option value="after">After (working tree)</option></select>
+<select id="city"><option>Tokyo</option><option>Hong Kong</option><option>Beijing</option></select>
+<select id="viewport"><option value="390">Mobile viewport 390 × 844</option><option value="1280">Desktop viewport 1280 × 800</option></select>
+<button id="open">Load selected version</button>
+<button data-action="shibuya">涩谷</button><button data-action="harajuku">原宿</button><button data-action="omotesando">表参道</button><button data-action="zoom">Rapid zoom</button>
+<button data-action="Tokyo">Tokyo</button><button data-action="Hong Kong">Hong Kong</button><button data-action="Beijing">Beijing</button><button id="save">Download report</button>
+<main><iframe title="Isolated map test" id="frame"></iframe><pre id="output">Choose Load selected version.</pre></main>
+<script>
+const frame=document.querySelector('#frame');let latest;
+document.querySelector('#open').onclick=()=>{
+  const width=document.querySelector('#viewport').value;
+  frame.style.width=width+'px';frame.style.height=width==='390'?'844px':'800px';
+  latest=null;document.querySelector('#output').textContent='Loading…';
+  frame.src='/'+document.querySelector('#variant').value+'/index.html?city='+encodeURIComponent(document.querySelector('#city').value);
+};
+document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>frame.contentWindow.postMessage({auditAction:button.dataset.action},location.origin));
+window.addEventListener('message',event=>{
+  if(event.origin!==location.origin||event.source!==frame.contentWindow||!event.data.coffeeAudit)return;
+  latest=event.data.coffeeAudit;document.querySelector('#output').textContent=JSON.stringify(latest,null,2);
+});
+document.querySelector('#save').onclick=()=>{
+  if(!latest)return;const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)],{type:'application/json'}));
+  link.download='coffee-map-'+latest.variant+'-audit.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+};
+</script>
