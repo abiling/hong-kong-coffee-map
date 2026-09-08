@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Coffee Shops · Map Style PoC</title>
+  <link rel="preconnect" href="https://tiles.openfreemap.org" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css" />
+  <style>
+    :root { color-scheme: light; font-family: -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",Arial,sans-serif; }
+    * { box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; margin: 0; }
+    body { overflow: hidden; background: #eee; }
+    #map { position: fixed; inset: 0; }
+    .panel {
+      position: fixed; z-index: 10; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+      width: min(720px, calc(100vw - 24px)); padding: 10px;
+      border: 1px solid rgba(0,0,0,.08); border-radius: 18px;
+      background: rgba(255,255,255,.9); backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+    }
+    .row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+    .row + .row { margin-top: 7px; }
+    button {
+      appearance: none; border: 0; border-radius: 999px; padding: 8px 12px; min-height: 34px;
+      font: inherit; font-size: 13px; line-height: 1; color: #222; background: rgba(0,0,0,.06); cursor: pointer;
+    }
+    button:hover { background: rgba(0,0,0,.1); }
+    button.active { color: #fff; background: #111; }
+    .spacer { flex: 1; }
+    .status { padding: 0 5px; font-size: 12px; color: #666; white-space: nowrap; }
+    .hint {
+      position: fixed; z-index: 10; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+      padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.88); backdrop-filter: blur(14px);
+      box-shadow: 0 4px 18px rgba(0,0,0,.1); font-size: 12px; color: #555; white-space: nowrap;
+    }
+    .maplibregl-ctrl-top-right { top: 108px; }
+    @media (max-width: 600px) {
+      .panel { top: max(8px, env(safe-area-inset-top)); width: calc(100vw - 16px); border-radius: 16px; padding: 8px; }
+      button { padding: 8px 10px; font-size: 12px; }
+      .status { display: none; }
+      .maplibregl-ctrl-top-right { top: 120px; }
+      .hint { max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="panel" aria-label="地图样式对比控制">
+    <div class="row" id="styleButtons">
+      <button type="button" data-style="positron" class="active">Positron</button>
+      <button type="button" data-style="bright">Bright</button>
+      <button type="button" data-style="liberty">Liberty</button>
+      <button type="button" data-style="liberty3d">Liberty + 3D</button>
+      <span class="spacer"></span>
+      <span class="status" id="status">Tokyo · Shibuya</span>
+    </div>
+    <div class="row" id="cityButtons">
+      <button type="button" data-city="tokyo" class="active">东京 · 涩谷</button>
+      <button type="button" data-city="hongkong">香港 · 中环</button>
+      <button type="button" data-city="beijing">北京 · 三里屯</button>
+      <span class="spacer"></span>
+      <button type="button" id="view2d">2D</button>
+      <button type="button" id="viewTilt">倾斜视角</button>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">切换 Style 比较地图信息密度；Liberty + 3D 在 zoom ≥ 15 显示建筑高度</div>
+
+  <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+  <script>
+    (() => {
+      const STYLES = {
+        positron: 'https://tiles.openfreemap.org/styles/positron',
+        bright: 'https://tiles.openfreemap.org/styles/bright',
+        liberty: 'https://tiles.openfreemap.org/styles/liberty',
+        liberty3d: 'https://tiles.openfreemap.org/styles/liberty'
+      };
+
+      const CITIES = {
+        tokyo: { label: 'Tokyo · Shibuya', center: [139.70055, 35.6595], zoom: 15.7, bearing: -15 },
+        hongkong: { label: 'Hong Kong · Central', center: [114.1568, 22.2819], zoom: 15.8, bearing: -18 },
+        beijing: { label: 'Beijing · Sanlitun', center: [116.4542, 39.9367], zoom: 15.6, bearing: -12 }
+      };
+
+      let activeStyle = 'positron';
+      let activeCity = 'tokyo';
+      let map;
+
+      const status = document.getElementById('status');
+      const hint = document.getElementById('hint');
+
+      function buildingLayers() {
+        return (map.getStyle()?.layers || []).filter(layer => layer.type === 'fill-extrusion');
+      }
+
+      function firstLabelLayerId() {
+        return (map.getStyle()?.layers || []).find(layer => layer.type === 'symbol' && layer.layout?.['text-field'])?.id;
+      }
+
+      function buildingSourceId() {
+        const candidate = (map.getStyle()?.layers || []).find(layer => layer['source-layer'] === 'building' && layer.source);
+        return candidate?.source || null;
+      }
+
+      function forceLiberty2D() {
+        buildingLayers().forEach(layer => {
+          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch (_) {}
+        });
+      }
+
+      function enableLiberty3D() {
+        const existing = buildingLayers();
+        if (existing.length) {
+          existing.forEach(layer => {
+            try { map.setLayoutProperty(layer.id, 'visibility', 'visible'); } catch (_) {}
+          });
+          return;
+        }
+
+        const source = buildingSourceId();
+        if (!source || map.getLayer('coffee-poc-3d-buildings')) return;
+
+        map.addLayer({
+          id: 'coffee-poc-3d-buildings',
+          source,
+          'source-layer': 'building',
+          type: 'fill-extrusion',
+          minzoom: 15,
+          filter: ['!=', ['get', 'hide_3d'], true],
+          paint: {
+            'fill-extrusion-color': '#d7d4ce',
+            'fill-extrusion-opacity': 0.82,
+            'fill-extrusion-height': [
+              'interpolate', ['linear'], ['zoom'],
+              15, 0,
+              16, ['coalesce', ['get', 'render_height'], 6]
+            ],
+            'fill-extrusion-base': [
+              'interpolate', ['linear'], ['zoom'],
+              15, 0,
+              16, ['coalesce', ['get', 'render_min_height'], 0]
+            ]
+          }
+        }, firstLabelLayerId());
+      }
+
+      function applyModeAfterLoad() {
+        if (activeStyle === 'liberty') {
+          forceLiberty2D();
+          hint.textContent = 'Liberty 2D：保留常规地图信息层级，建筑 extrusion 已隐藏';
+        } else if (activeStyle === 'liberty3d') {
+          enableLiberty3D();
+          map.easeTo({ pitch: Math.max(map.getPitch(), 48), bearing: map.getBearing() || CITIES[activeCity].bearing, duration: 450 });
+          hint.textContent = 'Liberty + 3D：zoom ≥ 15 显示 OSM 建筑高度；可拖动/缩放检查街区';
+        } else if (activeStyle === 'bright') {
+          hint.textContent = 'Bright：信息更传统、更明显，可与 Liberty 比较道路 / POI / 绿地层级';
+        } else {
+          hint.textContent = 'Positron：当前 App 的低饱和极简基准';
+        }
+      }
+
+      function createMap({ preserveCamera = false } = {}) {
+        let camera;
+        if (preserveCamera && map) {
+          const c = map.getCenter();
+          camera = { center: [c.lng, c.lat], zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
+          map.remove();
+        }
+        const city = CITIES[activeCity];
+        const initial = camera || { center: city.center, zoom: city.zoom, pitch: activeStyle === 'liberty3d' ? 48 : 0, bearing: activeStyle === 'liberty3d' ? city.bearing : 0 };
+        map = new maplibregl.Map({
+          container: 'map',
+          style: STYLES[activeStyle],
+          center: initial.center,
+          zoom: initial.zoom,
+          pitch: initial.pitch,
+          bearing: initial.bearing,
+          maxZoom: 19,
+          attributionControl: false,
+          canvasContextAttributes: { antialias: true }
+        });
+        map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+        map.on('load', applyModeAfterLoad);
+      }
+
+      function setStyleButtonState() {
+        document.querySelectorAll('[data-style]').forEach(button => button.classList.toggle('active', button.dataset.style === activeStyle));
+      }
+
+      function setCityButtonState() {
+        document.querySelectorAll('[data-city]').forEach(button => button.classList.toggle('active', button.dataset.city === activeCity));
+        status.textContent = CITIES[activeCity].label;
+      }
+
+      document.getElementById('styleButtons').addEventListener('click', event => {
+        const button = event.target.closest('[data-style]');
+        if (!button || button.dataset.style === activeStyle) return;
+        activeStyle = button.dataset.style;
+        setStyleButtonState();
+        createMap({ preserveCamera: true });
+      });
+
+      document.getElementById('cityButtons').addEventListener('click', event => {
+        const button = event.target.closest('[data-city]');
+        if (!button) return;
+        activeCity = button.dataset.city;
+        setCityButtonState();
+        const city = CITIES[activeCity];
+        map.flyTo({ center: city.center, zoom: city.zoom, bearing: activeStyle === 'liberty3d' ? city.bearing : 0, pitch: activeStyle === 'liberty3d' ? 48 : map.getPitch(), duration: 650, essential: true });
+      });
+
+      document.getElementById('view2d').addEventListener('click', () => {
+        map.easeTo({ pitch: 0, bearing: 0, duration: 450 });
+      });
+
+      document.getElementById('viewTilt').addEventListener('click', () => {
+        const city = CITIES[activeCity];
+        map.easeTo({ pitch: 48, bearing: city.bearing, duration: 450 });
+      });
+
+      createMap();
+    })();
+  </script>
+</body>
+</html>
