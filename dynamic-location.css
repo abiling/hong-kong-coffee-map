@@ -1,0 +1,29 @@
+.country-option-group {
+  display: block !important;
+}
+
+.country-option-group + .country-option-group {
+  border-top: 1px solid rgba(23, 23, 19, .1) !important;
+}
+
+.country-option-group > .country-option {
+  border-bottom: 0 !important;
+}
+
+.country-city-list {
+  margin: 0 0 8px 18px !important;
+  border-left: 1px solid rgba(23, 23, 19, .1) !important;
+}
+
+.country-city-option {
+  min-height: 58px !important;
+  padding: 10px 4px 10px 16px !important;
+}
+
+.country-city-option strong {
+  font-size: 16px !important;
+}
+
+.country-city-option:last-child {
+  border-bottom: 0 !important;
+}

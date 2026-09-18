@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Coffee Shops" />
-  <title>Hong Kong SAR · Coffee Shops</title>
+  <title>Coffee Shops</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png" />
@@ -39,19 +39,23 @@
         <div class="brand-copy">
           <img class="brand-mark" src="icons/mark-cafe-shops.svg" width="76" height="20" alt="Cafe Shops" />
           <button id="cityButton" class="city-title-button" type="button" aria-haspopup="dialog" aria-controls="countrySheet">
-            <span data-country-label>Hong Kong SAR</span>
+            <span data-country-label>Coffee Shops</span>
             <span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>
           </button>
           <script>
             (() => {
               try {
-                const city = localStorage.getItem('coffee-map-active-city-v1');
-                const countries = { 'Hong Kong': ['Hong Kong SAR', 'HK'], Tokyo: ['Japan', 'JP'], Beijing: ['China', 'CN'] };
-                if (!countries[city]) return;
-                document.querySelector('[data-country-label]').textContent = countries[city][0];
+                const city = String(localStorage.getItem('coffee-map-active-city-v1') || '').trim();
+                const countryCode = String(localStorage.getItem('coffee-map-active-country-v1') || '').trim().toUpperCase();
+                const cached = JSON.parse(localStorage.getItem('coffee-map-all-data-v3') || 'null');
+                const shops = Array.isArray(cached?.shops) ? cached.shops : [];
+                const location = shops.find(shop => String(shop.city || '').trim() === city
+                  && (!countryCode || String(shop.country_code || '').trim().toUpperCase() === countryCode));
+                if (!location?.country || !location?.country_code) return;
+                document.querySelector('[data-country-label]').textContent = String(location.country).trim();
                 document.documentElement.dataset.city = city.toLowerCase().replace(/\s+/g, '-');
-                document.documentElement.dataset.country = countries[city][1].toLowerCase();
-                document.title = countries[city][0] + ' · Coffee Shops';
+                document.documentElement.dataset.country = String(location.country_code).trim().toLowerCase();
+                document.title = String(location.country).trim() + ' · Coffee Shops';
               } catch (_) {}
             })();
           </script>
@@ -183,8 +187,9 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-  <script src="./map-config.js?v=36"></script>
-  <script src="./app.js?v=37"></script>
-  <script src="./admin-core.js?v=36"></script>
+  <script src="./location-catalog.js?v=38"></script>
+  <script src="./map-config.js?v=38"></script>
+  <script src="./app.js?v=38"></script>
+  <script src="./admin-core.js?v=38"></script>
 </body>
 </html>

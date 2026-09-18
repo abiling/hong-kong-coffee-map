@@ -1,9 +1,9 @@
-const CACHE = 'coffee-map-v37-20260908-map-lifecycle';
+const CACHE = 'coffee-map-v38-20260918-dynamic-location-catalog';
 const SHELL = [
   './', './index.html', './fonts.css?v=36', './styles.css?v=36', './admin.css?v=36',
-  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36',
-  './map-config.js?v=36', './multicity.js?v=36', './compact-search.js?v=36',
-  './app.js?v=37', './admin-core.js?v=36', './manifest.webmanifest',
+  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36', './dynamic-location.css?v=38',
+  './location-catalog.js?v=38', './map-config.js?v=38', './multicity.js?v=38', './compact-search.js?v=36',
+  './app.js?v=38', './admin-core.js?v=38', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];

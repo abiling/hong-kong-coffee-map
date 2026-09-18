@@ -234,12 +234,15 @@
     data.longitude = Number(data.longitude);
     data.active = true;
     data.status = shopIndex.get(String(data.id))?.status || '想去';
-    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
-    if (!data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写当前城市指定的有效地图链接');
+    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data) || { requiredField: 'google_maps' };
+    const completeLocation = window.CoffeeMapLocationCatalog?.isCompleteLocation(data) ?? Boolean(data.city && data.country && data.country_code);
+    if (!completeLocation || !data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写完整地点资料和当前地区指定的有效地图链接');
     button.disabled = true;
     button.textContent = '正在保存…';
     try {
-      const previousCity = shopIndex.get(String(data.id))?.city || window.CoffeeMapCities?.activeCity;
+      const previousShop = shopIndex.get(String(data.id));
+      const previousCity = previousShop?.city || window.CoffeeMapCities?.activeCity;
+      const previousCountryCode = previousShop?.country_code || window.CoffeeMapCities?.activeCountryCode;
       const payload = await post('update', data);
       shopIndex.set(String(payload.shop.id), payload.shop);
       if (previousCity && previousCity !== payload.shop.city) {
@@ -248,7 +251,7 @@
       window.CoffeeMapData?.upsert(payload.shop);
       $('#editPlaceDialog').close();
       window.dispatchEvent(new CustomEvent('coffee-map:shop-updated', {
-        detail: { shop: payload.shop, previousCity }
+        detail: { shop: payload.shop, previousCity, previousCountryCode }
       }));
       showToast('地点资料已更新');
     } catch (error) {
@@ -264,12 +267,12 @@
     if (!shop) return showToast('找不到这个地点');
     if (!confirm(`确定删除“${shop.name}”吗？\n\n该地点会从地图隐藏，但仍可在 Google Sheet 中将 active 改回 TRUE 恢复。`)) return;
     try {
-      const city = String(shop.city || window.CoffeeMapCities?.activeCity || 'Hong Kong');
+      const city = String(shop.city || window.CoffeeMapCities?.activeCity || '');
       await post('archive', { id: String(id) });
       shopIndex.delete(String(id));
       window.CoffeeMapData?.remove(String(id), city);
       window.dispatchEvent(new CustomEvent('coffee-map:shop-removed', {
-        detail: { id: String(id), city }
+        detail: { id: String(id), city, countryCode: String(shop.country_code || '') }
       }));
       showToast('地点已删除');
     } catch (error) {

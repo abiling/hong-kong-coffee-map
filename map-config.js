@@ -4,7 +4,8 @@
   [
     './filter-scroll.css?v=36',
     './compact-nav.css?v=36',
-    './city-list-fix.css?v=36'
+    './city-list-fix.css?v=36',
+    './dynamic-location.css?v=38'
   ].forEach(href => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -23,7 +24,7 @@
   }
 
   if (!document.querySelector('script[data-multicity]')) {
-    const openTag = '<scr' + 'ipt src="./multicity.js?v=36" data-multicity="true">';
+    const openTag = '<scr' + 'ipt src="./multicity.js?v=38" data-multicity="true">';
     const closeTag = '</scr' + 'ipt>';
     document.write(openTag + closeTag);
   }

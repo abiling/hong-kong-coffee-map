@@ -4,26 +4,27 @@
 
 ## 地区规则
 
-- 香港特别行政区和日本使用 Google Maps。
-- 中国内地使用 Apple Maps。
-- 新增城市必须先加入城市配置，才能接受该城市的数据；地图服务商必须遵循上述地区规则。
+- 中国内地（`country_code === "CN"`）使用 Apple Maps。
+- 其他国家／地区默认使用 Google Maps。
+- Provider policy 与城市目录解耦。新城市和新国家由完整地点数据自动进入前端目录，不需要注册城市白名单。
 
-## 当前城市映射
+## 当前数据示例
 
 | 城市 | 国家／地区 | 必须使用 | 必填字段 | 必须留空的字段 |
 | --- | --- | --- | --- | --- |
 | Hong Kong | Hong Kong SAR | Google Maps | `google_maps` | `apple_maps` |
 | Tokyo | Japan | Google Maps | `google_maps` | `apple_maps` |
 | Beijing | China | Apple Maps | `apple_maps` | `google_maps` |
+| Xi'an | China | Apple Maps | `apple_maps` | `google_maps` |
 
-地图服务商由 `country_code` 决定，不能根据设备、浏览器、操作系统或记录中碰巧存在的链接来推断。当前映射为：`HK`、`JP` 使用 Google Maps；`CN` 使用 Apple Maps。
+地图服务商只由规范化的 `country_code` 决定，不能根据设备、浏览器、操作系统、城市白名单或记录中碰巧存在的链接来推断。当前政策为：`CN` 使用 Apple Maps；其他国家／地区默认使用 Google Maps。
 
 ## 数据规则
 
 1. 只保存指定服务商提供的原始、具体商户资料链接。
 2. 不根据店名、地址或坐标生成另一家地图服务商的链接。
 3. 商户链接缺失时，不用通用搜索链接代替。
-4. 新增或更新记录时，城市对应的地图字段必须有值，另一个地图字段写入空字符串。
+4. 新增或更新记录时，国家／地区政策对应的地图字段必须有值，另一个地图字段写入空字符串。
 5. 读取既有记录时不进行破坏性迁移。App 必须忽略并隐藏不属于该城市服务商的链接；只有明确编辑或执行迁移时才覆盖该行。
 6. 店铺详情页只显示一个地图按钮。指定的商户链接缺失时不显示替代按钮，并将该记录视为不完整。
 
@@ -40,39 +41,41 @@ Apps Script API 必须独立执行本规则，不能只依赖前端校验。
 
 ### Parse
 
-Google example:
+Google example（城市不需要预注册）：
 
 ```json
 {
   "action": "parse",
   "data": {
-    "city": "Tokyo",
-    "country_code": "JP",
+    "city": "Seoul",
+    "country_code": "KR",
     "google_maps": "https://maps.app.goo.gl/..."
   }
 }
 ```
 
-Apple example:
+Apple example（适用于所有中国内地城市）：
 
 ```json
 {
   "action": "parse",
   "data": {
-    "city": "Beijing",
+    "city": "Xi'an",
     "country_code": "CN",
     "apple_maps": "https://maps.apple.com/place?..."
   }
 }
 ```
 
-解析结果必须保留 `city`、`country`、`country_code`，并且只返回该国家／地区允许的地图链接字段。
+解析结果必须尽可能输出并保留规范化的 `city`、`country`、`country_code`、`region`、`district`、`latitude`、`longitude`，并且只返回该国家／地区允许的地图链接字段。前端将这些字段视为 canonical data，不通过坐标或地址覆盖它们。
+
+如果解析器无法可靠确定 `city`、`country` 或 `country_code`，必须返回空值或明确的不完整状态，交由人工确认；不得猜测为 Hong Kong、Tokyo 或 Beijing。
 
 ### Add and update
 
 写入 Google Sheets 前，服务端必须：
 
-1. 根据 `country_code` 确定地图服务商，并校验它与 `city` 一致；
+1. 根据 `country_code` 确定地图服务商，不要求 `city` 存在于前端注册表；
 2. 校验必填链接；
 3. 拒绝缺失或服务商不匹配的链接；
 4. 将另一个地图字段设为 `""`；
@@ -81,15 +84,12 @@ Apple example:
 建议使用以下 Apps Script 写入保护函数：
 
 ```javascript
-const COUNTRY_MAP_RULES = Object.freeze({
-  HK: { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
-  JP: { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' },
-  CN: { provider: 'apple', requiredField: 'apple_maps', blockedField: 'google_maps' }
-});
-
 function applyMapProviderRule_(record) {
-  const rule = COUNTRY_MAP_RULES[String(record.country_code || '').toUpperCase()];
-  if (!rule) throw new Error('Unsupported country/region');
+  const countryCode = String(record.country_code || '').trim().toUpperCase();
+  if (!countryCode) throw new Error('country_code is required');
+  const rule = countryCode === 'CN'
+    ? { provider: 'apple', requiredField: 'apple_maps', blockedField: 'google_maps' }
+    : { provider: 'google', requiredField: 'google_maps', blockedField: 'apple_maps' };
 
   const url = String(record[rule.requiredField] || '').trim();
   if (!url) throw new Error(rule.requiredField + ' is required for ' + record.country_code);
@@ -111,4 +111,4 @@ function validateProviderUrl_(provider, value) {
 
 ## 坐标
 
-北京 Apple Maps 商户链接中的高德系坐标按 GCJ-02 处理；Apps Script API 在写入前将其转换为当前 MapLibre/OpenFreeMap 底图使用的 WGS-84 坐标。解析结果同时返回 `source_coordinate` 供人工核对，但数据表的 `latitude`、`longitude` 只保存转换后的 WGS-84 坐标。首批北京数据仍须逐店验证，不能跳过人工确认。
+中国内地 Apple Maps 商户链接中的高德系坐标按 GCJ-02 处理；Apps Script API 在写入前应将其转换为当前 MapLibre/OpenFreeMap 底图使用的 WGS-84 坐标。解析结果同时返回 `source_coordinate` 供人工核对，但数据表的 `latitude`、`longitude` 只保存转换后的 WGS-84 坐标。新城市首批数据仍须逐店验证，不能跳过人工确认。

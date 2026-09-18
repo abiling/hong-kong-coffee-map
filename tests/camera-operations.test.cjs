@@ -88,8 +88,12 @@ async function citySwitch(cacheKind) {
     },
     activeRegion: 'x', activeDistrict: 'x', selectedId: 'x', shops: ['old'], filtered: ['old'],
     els: { search: { value: 'query' }, clearSearch: { classList: { remove() {} } }, detailSheet: {}, districtSheet: {} },
-    window: { CoffeeMapCities: { activeCity: 'Tokyo', cities: { Tokyo: { center: [139.69, 35.68], zoom: 10.6 } }, renderRegionRail() {} } },
-    activeCityName: () => 'Tokyo', closeSheet() {}, renderDistricts() {}, applyFilters() {},
+    window: { CoffeeMapCities: {
+      activeCity: 'Tokyo', activeCountryCode: 'JP',
+      getCity: () => ({ camera: { center: [139.69, 35.68], zoom: 10.6 } }),
+      renderRegionRail() {}
+    } },
+    activeCityName: () => 'Tokyo', activeCountryCode: () => 'JP', closeSheet() {}, renderDistricts() {}, applyFilters() {},
     readCityCache: () => cached,
     loadCloudShops: async ({ fit }) => {
       // Valid cached or newly fetched remote data causes applyFilters({fit:true})

@@ -8,24 +8,25 @@ A mobile-first HTML5/PWA map for personal coffee-shop collections organized by c
 - Map: MapLibre GL JS + OpenFreeMap
 - Cloud database: Google Sheets
 - API: Google Apps Script Web App
-- Local browser storage: the administrator key and active country/city use localStorage; each city's shop list uses sessionStorage and is cleared when the tab session ends
+- Local browser storage: the administrator key, active country/city and the complete shop dataset use localStorage
 
 ## Current features
 
 - Cloud loading of all coffee shops
 - Search by shop name, address, district, region or notes
-- Country/region → city → area navigation
+- Data-driven country/region → city → area navigation generated from canonical Sheet/API fields
 - Dynamic area filters that only show areas containing shops
 - Only important public-building POIs are shown; ordinary commercial POIs remain hidden
 - Map, list and favorites views
-- Country-specific merchant links: Google Maps for Hong Kong SAR and Japan, Apple Maps for mainland China
+- Jurisdiction policy for merchant links: Apple Maps for `CN`; Google Maps by default elsewhere
 - Cloud-synced favorites
-- Add a shop by pasting the map link required by its city
+- Add a shop by pasting the map link required by its country/region policy
 - Automatic link parsing with editable fields before saving
 - JSON and CSV exports
 - iPhone safe-area layout and installable PWA
 
 The canonical city/provider policy and Apps Script validation contract are documented in [MAP_PROVIDER_RULES.md](MAP_PROVIDER_RULES.md).
+The data-driven catalog architecture and parser boundary are documented in [docs/dynamic-location-catalog.md](docs/dynamic-location-catalog.md).
 
 ## Repository hygiene
 
