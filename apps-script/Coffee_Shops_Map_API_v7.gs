@@ -8,7 +8,7 @@
  */
 
 const CONFIG = Object.freeze({
-  SPREADSHEET_ID: '1HL91cIBqeZI1V6kB4uElvxuomgrhfnqajDjTvFxaxcQ',
+  PRODUCTION_SPREADSHEET_ID: '1HL91cIBqeZI1V6kB4uElvxuomgrhfnqajDjTvFxaxcQ',
   SHEET_NAME: 'Coffee Shops',
   TIME_ZONE: 'Asia/Hong_Kong',
   HEADERS: [
@@ -341,41 +341,32 @@ function parseGoogleMapsLink_(url) {
   validateGoogleMapsUrl_(url);
   const resolved = resolveRedirects_(url, validateGoogleMapsUrl_);
   const name = extractPlaceName_(resolved) || extractPlaceName_(url);
-  let point = extractCoordinates_(resolved) || extractCoordinates_(url);
-  const forward = !point && name ? geocodePlaceName_(name) : null;
-  if (forward) point = geocoderPoint_(forward);
-  if (!validPoint_(point)) throw new Error('无法确定商户坐标，请提供具体商户链接。');
+  const point = extractCoordinates_(resolved);
+  if (!validPoint_(point)) throw new Error('无法确定商户坐标，请提供含商户定位的 Google Maps 链接。');
   const result = reverseGeocode_(point.latitude, point.longitude);
-  const location = canonicalLocation_(result);
-  if (forward) {
-    const check = canonicalLocation_(forward);
-    if (check.city !== location.city || check.country_code !== location.country_code) throw new Error('名称与坐标归属不一致。');
-  }
-  requireCountryProvider_(location.country_code, 'google');
-  const place = makeParsedPlace_(location, result, point, name || extractPremiseName_(result), result.formatted_address);
+  const place = makeParsedPlace_(result.location, result.address, point, name, result.address.formatted_address);
+  requireCountryProvider_(place.country_code, 'google');
   return Object.assign(place, {google_maps:url, resolved_google_maps:resolved,
-    parse_method:forward ? 'global_name_geocoding' : 'url_coordinates_reverse_geocoding'});
+    parse_method:'url_coordinates_reverse_geocoding'});
 }
 
 function parseAppleMapsLink_(url) {
   validateAppleMapsUrl_(url);
   const resolved = resolveRedirects_(url, validateAppleMapsUrl_);
-  const source = extractAppleCoordinates_(resolved) || extractAppleCoordinates_(url);
+  const source = extractAppleCoordinates_(resolved);
   if (!validPoint_(source)) throw new Error('Apple Maps 商户链接缺少有效坐标。');
   const name = extractAppleTextParameter_(resolved,url,'name');
   const address = extractAppleTextParameter_(resolved,url,'address');
-  if (!name) throw new Error('Apple Maps 商户链接缺少店铺名称。');
-  const china = /(?:\bChina|中国|中國)[\s,，]*$/i.test(address) &&
-    !/(?:Hong Kong|Macao|Macau|Taiwan|香港|澳门|澳門|台湾|臺灣)/i.test(address);
-  if (!china) {
-    // Discover jurisdiction first when the URL does not identify mainland China.
-    requireCountryProvider_(canonicalLocation_(reverseGeocode_(source.latitude,source.longitude)).country_code,'apple');
+  if (!name && !mapPlaceId_(resolved) && !mapPlaceId_(url)) {
+    throw new Error('Apple Maps 商户链接缺少店铺名称或商户 ID。');
   }
+  // Check the source jurisdiction before treating the pin as mainland GCJ-02.
+  const sourceGeo = reverseGeocode_(source.latitude, source.longitude);
+  requireCountryProvider_(sourceGeo.location.country_code, 'apple');
   const point = gcj02ToWgs84_(source.latitude,source.longitude);
-  const result = reverseGeocode_(point.latitude,point.longitude);
-  const location = canonicalLocation_(result);
-  requireCountryProvider_(location.country_code,'apple');
-  const place = makeParsedPlace_(location,result,point,name,address || result.formatted_address);
+  const result = reverseGeocode_(point.latitude, point.longitude);
+  requireCountryProvider_(result.location.country_code,'apple');
+  const place = makeParsedPlace_(result.location,result.address,point,name,address || result.address.formatted_address);
   return Object.assign(place,{apple_maps:url,resolved_apple_maps:resolved,
     parse_method:'apple_place_gcj02_to_wgs84_reverse_geocoding',
     source_coordinate:{latitude:roundCoordinate_(source.latitude),longitude:roundCoordinate_(source.longitude),system:'GCJ-02'}});
@@ -388,60 +379,89 @@ function validPoint_(p) {
 
 function makeParsedPlace_(location,result,point,name,address) {
   address = cleanText_(address);
-  let region = addressComponent_(result,['sublocality_level_1','administrative_area_level_2','administrative_area_level_1']);
-  let district = addressComponent_(result,['sublocality_level_2','sublocality_level_3','neighborhood','sublocality','route']);
+  const neighborhood = value => locationLabel_(value) === locationLabel_(location.city) ? '' : value;
+  const sublocality = neighborhood(addressComponent_(result, ['sublocality_level_1']));
+  const lowerAdmin = ['administrative_area_level_3', 'administrative_area_level_2']
+    .map(type => neighborhood(addressComponent_(result, [type])))
+    .find(value => /(?: District| Borough|-gu|[区區구])$/i.test(value));
+  let region = lowerAdmin || sublocality;
+  let district = ['sublocality_level_2', 'sublocality_level_3', 'neighborhood', 'sublocality']
+    .map(type => neighborhood(addressComponent_(result, [type])))
+    .find(value => value && locationLabel_(value) !== locationLabel_(region)) || '';
+  if (!district && lowerAdmin && locationLabel_(sublocality) !== locationLabel_(lowerAdmin)) district = sublocality;
   const known = (value,fallback) => value && value !== '待确认' ? value : fallback;
   if (location.country_code === 'HK') {
     district = known(inferDistrict_(address),district);
     region = known(inferRegion_(district),region);
   } else if (location.country_code === 'JP' && location.city === 'Tokyo') {
     region = known(inferTokyoRegion_(result,address),region);
-    district = known(inferTokyoDistrict_(result,address),district);
   } else if (location.country_code === 'CN' && location.city === 'Beijing') {
     region = known(inferBeijingRegion_(address),region);
     district = known(inferBeijingDistrict_(name,address),district);
   }
+  if (locationLabel_(region) === locationLabel_(district)) district = '';
   return Object.assign({google_maps:'',apple_maps:'',name,address,region,district,
     latitude:roundCoordinate_(point.latitude),longitude:roundCoordinate_(point.longitude),
     category:'',status:'想去',source:'',notes:'',active:true,needs_review:true},location);
 }
 
-function addShop_(input) {
-  const inputCity = cleanText_(input.city);
-  const inputCode = normalizeCountryCode_(input.country_code, input.country, inputCity);
-  if (!inputCity || !inputCode) throw new Error('请选择国家／地区和城市。');
-  const parsed = parseMapLink_(input);
-  if (inputCity !== parsed.city || inputCode !== parsed.country_code) throw new Error('地点归属与链接不一致，请重新解析。');
-  const shop = normalizeShopInput_(Object.assign({}, parsed, input, {
-    city:parsed.city,country:parsed.country,country_code:parsed.country_code
-  }));
+function hasField_(input, field) {
+  return Object.prototype.hasOwnProperty.call(input, field);
+}
 
+function verifyShopLocation_(requested, submitted, parsed) {
+  const country = hasField_(submitted, 'country') ? cleanText_(submitted.country) : '';
+  const code = getCountryCodeForShop_(requested);
+  if (locationLabel_(canonicalCityName_(requested.city, code)) !== locationLabel_(parsed.city) ||
+      code !== parsed.country_code ||
+      (country && locationLabel_(country) !== locationLabel_(parsed.country) &&
+       normalizeCountryCode_('', country, '') !== parsed.country_code)) {
+    throw new Error('地点归属与链接不一致，请重新解析。');
+  }
+
+  ['latitude', 'longitude'].forEach(function (field) {
+    if (!hasField_(submitted, field)) return;
+    const value = toNumber_(submitted[field]);
+    const limit = field === 'latitude' ? 90 : 180;
+    if (!Number.isFinite(value) || Math.abs(value) > limit) throw new Error('缺少有效的经纬度。');
+    if (roundCoordinate_(value) !== parsed[field]) {
+      throw new Error('经纬度与商户链接不一致，请使用链接解析出的坐标。');
+    }
+  });
+
+  return {
+    city: parsed.city, country: parsed.country, country_code: parsed.country_code,
+    latitude: parsed.latitude, longitude: parsed.longitude
+  };
+}
+
+function addShop_(input) {
+  if (!cleanText_(input.city) || !getCountryCodeForShop_(input)) throw new Error('请选择国家／地区和城市。');
+  const parsed = parseMapLink_(input);
+  const location = verifyShopLocation_(input, input, parsed);
+  const shop = normalizeShopInput_(Object.assign({}, parsed, input, location));
   applyMapProviderRule_(shop);
   validateShop_(shop);
 
-  const duplicate = findDuplicate_(shop);
-  if (duplicate) {
-    throw new Error('这个地点可能已经存在：' + duplicate.name + '（' + duplicate.district + '）');
-  }
-
-  const now = nowIso_();
-  shop.id = createShopId_(shop.city);
-  shop.created_at = now;
-  shop.updated_at = now;
-  shop.active = true;
-
-  withWriteLock_(function () {
+  return withWriteLock_(function () {
     const sheet = getSheet_();
+    const table = readSheetTable_(sheet);
+    requireUniqueShop_(shop, parsed, table);
+
+    const now = nowIso_();
+    shop.id = createShopId_(shop.city);
+    shop.created_at = now;
+    shop.updated_at = now;
+    shop.active = true;
     sheet.appendRow(CONFIG.HEADERS.map(function (header) {
       return safeSheetValue_(shop[header]);
     }));
+    return shop;
   });
-
-  return shop;
 }
 
 function updateShop_(input) {
-  const id = String(input.id || '').trim();
+  const id = cleanText_(input.id);
   if (!id) throw new Error('Missing shop id.');
 
   return withWriteLock_(function () {
@@ -451,31 +471,71 @@ function updateShop_(input) {
     if (rowIndex < 0) throw new Error('Shop not found.');
 
     const current = rowToObject_(table.headers, table.rows[rowIndex]);
-    const allowedFields = [
+    const changes = {};
+    const editable = [
       'google_maps', 'name', 'address', 'region', 'district', 'latitude',
       'longitude', 'apple_maps', 'category', 'status', 'source', 'notes', 'active',
       'city', 'country', 'favorite', 'country_code'
     ];
-
-    allowedFields.forEach(function (field) {
-      if (Object.prototype.hasOwnProperty.call(input, field)) {
-        current[field] = input[field];
-      }
+    editable.forEach(function (field) {
+      if (hasField_(input, field)) changes[field] = input[field];
     });
 
-    const updated = normalizeShopInput_(current);
-    updated.id = id;
-    updated.created_at = current.created_at;
+    const coreFields = ['google_maps', 'apple_maps', 'city', 'country', 'country_code', 'latitude', 'longitude'];
+    const currentLocation = normalizeShopOutput_(Object.assign({}, current));
+    const requested = Object.assign({}, currentLocation, changes);
+    const currentCode = cleanText_(currentLocation.country_code);
+    const unusedLink = currentCode === 'CN' ? 'google_maps' : 'apple_maps';
+    // v39 clears the unused provider field when it submits the full form.
+    if (hasField_(changes, unusedLink) && !cleanText_(changes[unusedLink])) {
+      delete changes[unusedLink];
+      requested[unusedLink] = currentLocation[unusedLink];
+    }
+    const locationChanged = coreFields.some(function (field) {
+      if (!hasField_(changes, field)) return false;
+      if (field === 'country_code') return cleanText_(changes[field]).toUpperCase() !== currentCode;
+      if (field === 'latitude' || field === 'longitude') {
+        const value = toNumber_(changes[field]);
+        return Number.isFinite(currentLocation[field]) ? value !== currentLocation[field] :
+          cleanText_(changes[field]) !== cleanText_(current[field]);
+      }
+      return cleanText_(changes[field]) !== cleanText_(currentLocation[field]);
+    });
+
+    const updated = normalizeShopInput_(requested);
+    if (locationChanged) {
+      const field = getMapFieldForShop_(updated);
+      const other = field === 'apple_maps' ? 'google_maps' : 'apple_maps';
+      if (hasField_(changes, other) && cleanText_(changes[other]) &&
+          cleanText_(changes[other]) !== cleanText_(current[other])) {
+        throw new Error('请只提交当前国家／地区所需的地图商户链接。');
+      }
+      const parsed = parseMapLink_({[field]: updated[field]});
+      Object.assign(updated, verifyShopLocation_(requested, changes, parsed));
+      applyMapProviderRule_(updated);
+      validateShop_(updated);
+      requireUniqueShop_(updated, parsed, table, id);
+    } else {
+      if (hasField_(changes, 'name') && !updated.name) throw new Error('店铺名称不能为空。');
+      if (hasField_(changes, 'address') && !updated.address) throw new Error('店铺地址不能为空。');
+      if (hasField_(changes, 'status')) validateStatus_(updated.status);
+    }
     updated.updated_at = nowIso_();
-    if (hasMapProviderEdit_(input)) applyMapProviderRule_(updated);
-    validateShop_(updated);
 
-    sheet.getRange(rowIndex + 2, 1, 1, CONFIG.HEADERS.length)
-      .setValues([CONFIG.HEADERS.map(function (header) {
-        return safeSheetValue_(updated[header]);
-      })]);
-
-    return updated;
+    // Keep historical location fields intact when a non-location field is edited.
+    const writeFields = new Set(locationChanged ? [...Object.keys(changes), ...coreFields] :
+      Object.keys(changes).filter(field => !coreFields.includes(field)));
+    writeFields.add('updated_at');
+    const range = sheet.getRange(rowIndex + 2, 1, 1, CONFIG.HEADERS.length);
+    const formulas = range.getFormulas()[0];
+    const saved = {};
+    const row = CONFIG.HEADERS.map(function (field, index) {
+      const changed = writeFields.has(field);
+      saved[field] = changed ? updated[field] : current[field];
+      return !changed && formulas[index] ? formulas[index] : safeSheetValue_(saved[field]);
+    });
+    range.setValues([row]);
+    return normalizeShopOutput_(saved);
   });
 }
 
@@ -521,14 +581,12 @@ function filterShops_(shops, filters) {
 }
 
 function readSheetTable_(sheet) {
-  ensureHeaders_(sheet);
   const values = sheet.getDataRange().getValues();
-  if (!values.length) return { headers: [], rows: [] };
-
-  return {
-    headers: values[0].map(function (value) { return String(value).trim(); }),
-    rows: values.slice(1)
-  };
+  const headers = (values[0] || []).map(cleanText_);
+  if (!CONFIG.HEADERS.every((header, index) => headers[index] === header)) {
+    throw new Error('The Coffee Shops header row does not match the API schema.');
+  }
+  return { headers: headers, rows: values.slice(1) };
 }
 
 function normalizeShopInput_(input) {
@@ -588,34 +646,29 @@ function validateShop_(shop) {
   validateRequiredProviderLink_(shop);
   if (!shop.region) throw new Error('请选择大区／行政区。');
   if (!shop.district) throw new Error('请填写具体地区。');
-  if (['想去', '优先去', '去过'].indexOf(shop.status) === -1) {
+  validateStatus_(shop.status);
+}
+
+function validateStatus_(status) {
+  if (['想去', '优先去', '去过'].indexOf(status) === -1) {
     throw new Error('状态必须是：想去、优先去或去过。');
   }
 }
-function findDuplicate_(candidate) {
-  const shops = readShops_(false);
-  const mapField = getMapFieldForShop_(candidate);
-  const normalizedUrl = normalizeUrl_(candidate[mapField]);
-  const normalizedName = normalizeName_(candidate.name);
 
-  for (let i = 0; i < shops.length; i++) {
-    const existing = shops[i];
+function requireUniqueShop_(shop, parsed, table, excludedId) {
+  const duplicate = findDuplicate_(shop, parsed, table, excludedId);
+  if (duplicate) throw new Error('这个地点可能已经存在：' + duplicate.name + '（' + duplicate.district + '）');
+}
 
-    if (normalizedUrl && normalizeUrl_(existing[mapField]) === normalizedUrl) {
-      return existing;
-    }
-
-    if (normalizedName && normalizeName_(existing.name) === normalizedName) {
-      const distance = haversineMeters_(
-        candidate.latitude,
-        candidate.longitude,
-        existing.latitude,
-        existing.longitude
-      );
-      if (distance < 100) return existing;
-    }
+function findDuplicate_(candidate, parsed, table, excludedId) {
+  const field = getMapFieldForShop_(candidate);
+  const candidateLinks = [candidate[field], parsed['resolved_' + field]].filter(Boolean);
+  for (const row of table.rows) {
+    const existing = rowToObject_(table.headers, row);
+    const link = cleanText_(existing[field]);
+    if (!link || (excludedId && cleanText_(existing.id) === excludedId)) continue;
+    if (candidateLinks.some(candidateLink => sameMerchantLink_(candidateLink, link, field))) return existing;
   }
-
   return null;
 }
 
@@ -662,66 +715,66 @@ function resolveRelativeUrl_(baseUrl, location) {
 }
 
 function extractCoordinates_(url) {
-  const candidates = [url, safeDecode_(url)];
-
-  // @lat,lng and ll/center are viewport coordinates, not merchant pins.
-  const patterns = [
-    /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/,
-    /[?&](?:query|q)=(-?\d{1,3}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)(?=[&#]|$)/i
-  ];
-
-  for (let i = 0; i < candidates.length; i++) {
-    for (let j = 0; j < patterns.length; j++) {
-      const match = candidates[i].match(patterns[j]);
-      if (match) {
-        return {
-          latitude: Number(match[1]),
-          longitude: Number(match[2])
-        };
+  const path = url.split(/[?#]/, 1)[0];
+  const placePath = /\/maps\/place(?:\/|$)/i.test(path);
+  if (placePath) {
+    const data = googleMapsData_(url);
+    const pins = Array.from(data.matchAll(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)(?=!|\/|\s|$)/g),
+      match => parseCoordinatePair_(match[1] + ',' + match[2]));
+    if (pins.length) {
+      if (pins.some(pin => !validPoint_(pin) || !samePoint_(pin, pins[0]))) {
+        throw new Error('Google Maps 链接包含无效或互相冲突的商户坐标。');
       }
+      return pins[0];
     }
   }
 
+  // An explicit coordinate target is supported, while viewport centers and
+  // the fallback search query of a place-ID URL do not identify its pin.
+  if (!mapPlaceId_(url) && /\/maps(?:\/(?:search|place)\/?)?\/?$/i.test(path)) {
+    const targets = [...getQueryParameters_(url, 'query'), ...getQueryParameters_(url, 'q')].filter(Boolean);
+    const point = targets.length ? parseCoordinatePair_(targets[0]) : null;
+    if (point && targets.some(target => !samePoint_(point, parseCoordinatePair_(target)))) {
+      throw new Error('Google Maps 链接包含互相冲突的商户坐标。');
+    }
+    return point;
+  }
   return null;
 }
 
 function extractPlaceName_(url) {
-  const decodedUrl = safeDecode_(url);
-  const placeMatch = decodedUrl.match(/\/(?:maps\/)?place\/([^/?#]+)/i);
-
-  if (placeMatch) {
-    return cleanPlaceName_(placeMatch[1]);
-  }
-
-  const query = getQueryParameter_(decodedUrl, 'query') || getQueryParameter_(decodedUrl, 'q');
-  if (query && !/^\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*$/.test(query)) {
-    return cleanPlaceName_(query);
-  }
-
-  return '';
-}
-
-function cleanPlaceName_(value) {
-  return safeDecode_(String(value || ''))
-    .replace(/\+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const place = url.match(/\/maps\/place\/([^/?#]+)/i);
+  if (place) return cleanText_(safeDecode_(place[1].replace(/\+/g, ' ')));
+  const query = getQueryParameter_(url, 'query') || getQueryParameter_(url, 'q');
+  return parseCoordinatePair_(query) || /^place_id:/i.test(query) ? '' : cleanText_(query);
 }
 
 function getQueryParameter_(url, name) {
-  const match = url.match(new RegExp('[?&]' + name + '=([^&#]+)', 'i'));
-  return match ? safeDecode_(match[1].replace(/\+/g, ' ')) : '';
+  return getQueryParameters_(url, name)[0] || '';
+}
+
+function getQueryParameters_(url, name) {
+  const query = url.split('#', 1)[0].split('?').slice(1).join('?');
+  const pattern = new RegExp('(?:^|&)' + name + '=([^&]*)', 'gi');
+  return Array.from(query.matchAll(pattern), match => safeDecode_(match[1].replace(/\+/g, ' ')));
+}
+
+function parseCoordinatePair_(value) {
+  const match = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  return match ? {latitude:Number(match[1]),longitude:Number(match[2])} : null;
+}
+
+function samePoint_(a, b) {
+  return Boolean(a && b && a.latitude === b.latitude && a.longitude === b.longitude);
 }
 
 function extractAppleCoordinates_(url) {
-  const value = getQueryParameter_(url, 'coordinate') ||
-    getQueryParameter_(url, 'll') ||
-    getQueryParameter_(url, 'center');
-  const match = String(value || '').match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
-  if (!match) return null;
-  const latitude = Number(match[1]);
-  const longitude = Number(match[2]);
-  return isFinite(latitude) && isFinite(longitude) ? { latitude: latitude, longitude: longitude } : null;
+  // Apple uses ll and center for map presentation; use the explicit place pin.
+  const points = getQueryParameters_(url, 'coordinate').map(parseCoordinatePair_);
+  if (points.length > 1 && points.some(point => !samePoint_(points[0], point))) {
+    throw new Error('Apple Maps 链接包含互相冲突的商户坐标。');
+  }
+  return points[0] || null;
 }
 
 function extractAppleTextParameter_(resolvedUrl, originalUrl, name) {
@@ -773,9 +826,28 @@ function geocoderResults_(response) {
   return Array.isArray(response.results) ? response.results : [];
 }
 
-function geocoderPoint_(result) {
-  const point = result && result.geometry && result.geometry.location;
-  return point && {latitude:point.lat,longitude:point.lng};
+function locationLabel_(value) {
+  return cleanText_(value).normalize('NFKC').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').toLowerCase();
+}
+
+function canonicalCityName_(value, code) {
+  const city = cleanText_(value).normalize('NFKC').replace(/[‘’]/g, "'").replace(/\s+/g, ' ');
+  if (code === 'JP' && /^(?:Tokyo(?: Metropolis|-to)?|東京都|東京)$/i.test(city)) return 'Tokyo';
+  if (code === 'KR') {
+    if (/^(?:Seoul(?: Special(?: City)?)?|서울(?:특별시)?)$/i.test(city)) return 'Seoul';
+    return city.replace(/(?: Metropolitan City| Special City)$/i, '');
+  }
+  if (code !== 'CN') return city;
+  const name = city.replace(/(?: Shi| Municipality| City)$/i, '');
+  const aliases = {
+    'beijing':'Beijing', '北京':'Beijing', '北京市':'Beijing',
+    'shanghai':'Shanghai', '上海':'Shanghai', '上海市':'Shanghai',
+    'tianjin':'Tianjin', '天津':'Tianjin', '天津市':'Tianjin',
+    'chongqing':'Chongqing', '重庆':'Chongqing', '重庆市':'Chongqing', '重慶':'Chongqing', '重慶市':'Chongqing',
+    '西安':"Xi'an", '西安市':"Xi'an", 'xian':"Xi'an", "xi'an":"Xi'an"
+  };
+  const alias = locationLabel_(name);
+  return hasField_(aliases, alias) ? aliases[alias] : name;
 }
 
 function canonicalLocation_(result) {
@@ -783,54 +855,59 @@ function canonicalLocation_(result) {
   const code = cleanText_(country && country.short_name).toUpperCase();
   const name = cleanText_(country && country.long_name);
   if (!/^[A-Z]{2}$/.test(code) || !name) throw new Error('无法可靠确定国家／地区。');
-  const admin1 = addressComponent_(result,['administrative_area_level_1']);
-  let city = addressComponent_(result,['locality','postal_town']);
+
+  const admin1 = addressComponent_(result, ['administrative_area_level_1']);
+  const admin2 = addressComponent_(result, ['administrative_area_level_2']);
+  const locality = addressComponent_(result, ['locality']);
+  const postalTown = addressComponent_(result, ['postal_town']);
+  const nonCity = /(?: District| Borough| Province| Prefecture| County|-gu|[区區구县縣])$|^\d+(?:st|nd|rd|th) arrondissement$/i;
+  let city = [locality, postalTown].find(value => value && !nonCity.test(value)) || '';
+
   if (code === 'HK') city = 'Hong Kong';
-  // Distinguish central Tokyo wards from independent cities in the metropolis.
-  if (code === 'JP' && /^(?:Tokyo(?: Metropolis)?|東京都|東京)$/i.test(admin1)) {
+  if (code === 'JP' && canonicalCityName_(admin1, code) === 'Tokyo') {
     const ward = /^(?:Chiyoda|Chuo|Minato|Shinjuku|Bunkyo|Taito|Sumida|Koto|Shinagawa|Meguro|Ota|Setagaya|Shibuya|Nakano|Suginami|Toshima|Kita|Arakawa|Itabashi|Nerima|Adachi|Katsushika|Edogawa)(?:[- ](?:ku|City|Ward))?$/i;
-    if (!city || ward.test(city) || /区$/.test(city)) city = 'Tokyo';
+    const wardName = locality || city || admin2 || addressComponent_(result, ['sublocality_level_1']);
+    if (ward.test(wardName) || /区$/.test(wardName)) city = 'Tokyo';
   }
-  if (!city && code === 'CN' && /^(?:Shanghai|Beijing|Tianjin|Chongqing)(?: Shi| Municipality)?$/i.test(admin1)) city = admin1;
-  if (!city) city = addressComponent_(result,['administrative_area_level_2','sublocality_level_1','sublocality']);
   if (code === 'CN') {
-    city = city.replace(/(?: Shi| Municipality)$/i,'');
-    const aliases = {'北京':'Beijing','北京市':'Beijing','上海':'Shanghai','上海市':'Shanghai','西安':"Xi'an",'西安市':"Xi'an",'Xian':"Xi'an",'Xi’an':"Xi'an"};
-    if (Object.prototype.hasOwnProperty.call(aliases,city)) city = aliases[city];
+    // These province-level municipalities are cities. Elsewhere, admin2 can
+    // be a county or prefecture; require an explicit city designation.
+    if (['Beijing', 'Shanghai', 'Tianjin', 'Chongqing'].includes(canonicalCityName_(admin1, code))) city = admin1;
+    else if (!city && (/(?: Shi| City|市)$/i.test(admin2) || canonicalCityName_(admin2, code) === "Xi'an")) city = admin2;
   }
+  if (code === 'KR') {
+    if (canonicalCityName_(admin1, code) === 'Seoul') city = 'Seoul';
+    else if (!city && /(?: Metropolitan City| Special City|광역시|특별시)$/i.test(admin1)) city = admin1;
+  }
+  city = canonicalCityName_(city, code);
   if (!city) throw new Error('无法可靠确定城市，请提供更完整的商户链接。');
   const config = CONFIG.COUNTRY_CONFIG[code];
   return {city:city,country:config ? config.country : name,country_code:code};
 }
 
-function geocodePlaceName_(name) {
-  const results = geocoderResults_(Maps.newGeocoder().setLanguage('en').geocode(name))
-    .filter(x=>!x.partial_match && validPoint_(geocoderPoint_(x)) &&
-      !(x.types || []).some(t=>['country','locality','postal_town','route','postal_code'].includes(t) || /^administrative_area_level_/.test(t)));
-  if (!results.length) return null;
-  const first = results[0];
-  const location = canonicalLocation_(first);
-  const point = geocoderPoint_(first);
-  results.slice(1).forEach(x=>{
-    const next = canonicalLocation_(x);
-    const n = geocoderPoint_(x);
-    if (next.city !== location.city || next.country_code !== location.country_code ||
-      haversineMeters_(point.latitude,point.longitude,n.latitude,n.longitude)>100) throw new Error('名称对应多个地点，请提供含坐标的商户链接。');
-  });
-  return first;
-}
-
 function reverseGeocode_(latitude,longitude) {
   const results = geocoderResults_(Maps.newGeocoder().setLanguage('en').reverseGeocode(latitude,longitude));
-  let best = null;
-  let rank = -1;
-  results.forEach(result=>{
-    try { canonicalLocation_(result); } catch (_) { return; }
-    const candidateRank = addressComponent_(result,['locality','postal_town']) ? 2 : 1;
-    if (candidateRank > rank) { best=result; rank=candidateRank; }
-  });
-  if (!best) throw new Error('无法可靠确定完整国家／城市。');
-  return best;
+  let best = [];
+  let rank = 0;
+  for (const address of results) {
+    if (!address || address.partial_match) continue;
+    let location;
+    try { location = canonicalLocation_(address); } catch (_) { continue; }
+    const candidateRank = addressComponent_(address, ['locality']) ? 3 :
+      addressComponent_(address, ['postal_town']) ? 2 : 1;
+    if (candidateRank > rank) best = [];
+    if (candidateRank >= rank) {
+      best.push({address:address, location:location});
+      rank = candidateRank;
+    }
+  }
+  if (!best.length) throw new Error('无法可靠确定完整国家／城市。');
+  const location = best[0].location;
+  if (best.some(match => match.location.country_code !== location.country_code ||
+      locationLabel_(match.location.city) !== locationLabel_(location.city))) {
+    throw new Error('无法可靠确定城市：地理编码返回多个地点归属。');
+  }
+  return best[0];
 }
 
 function addressComponent_(result, types) {
@@ -863,27 +940,6 @@ function inferTokyoRegion_(result, address) {
     if (wards[i][1].some(function (alias) { return lower.indexOf(alias.toLowerCase()) !== -1; })) return wards[i][0];
   }
   return '待确认';
-}
-
-function inferTokyoDistrict_(result, address) {
-  const value = addressComponent_(result, ['sublocality_level_2', 'sublocality_level_3', 'neighborhood', 'premise']);
-  if (value) return value;
-  const parts = String(address || '').split(',').map(function (part) { return part.trim(); }).filter(Boolean);
-  return parts.length > 2 ? parts[parts.length - 3] : '待确认';
-}
-function extractPremiseName_(result) {
-  const components = (result && result.address_components) || [];
-  const preferredTypes = ['premise', 'establishment', 'point_of_interest'];
-
-  for (let i = 0; i < preferredTypes.length; i++) {
-    for (let j = 0; j < components.length; j++) {
-      if (components[j].types && components[j].types.indexOf(preferredTypes[i]) !== -1) {
-        return components[j].long_name || '';
-      }
-    }
-  }
-
-  return '';
 }
 
 function inferDistrict_(address) {
@@ -999,7 +1055,14 @@ function inferRegion_(district) {
 }
 
 function getSheet_() {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const properties = PropertiesService.getScriptProperties();
+  const id = cleanText_(properties.getProperty('SPREADSHEET_ID'));
+  const environment = properties.getProperty('DATABASE_ENVIRONMENT');
+  if (!id || !['candidate', 'production'].includes(environment) ||
+      (id === CONFIG.PRODUCTION_SPREADSHEET_ID) !== (environment === 'production')) {
+    throw new Error('Configure SPREADSHEET_ID and DATABASE_ENVIRONMENT for the intended database.');
+  }
+  const spreadsheet = SpreadsheetApp.openById(id);
   const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
   if (!sheet) throw new Error('Sheet not found: ' + CONFIG.SHEET_NAME);
   return sheet;
@@ -1111,7 +1174,9 @@ function withWriteLock_(callback) {
   }
 
   try {
-    return callback();
+    const result = callback();
+    SpreadsheetApp.flush();
+    return result;
   } finally {
     lock.releaseLock();
   }
@@ -1169,14 +1234,6 @@ function applyMapProviderRule_(shop) {
   const required = getMapFieldForShop_(shop);
   shop[required === 'apple_maps' ? 'google_maps' : 'apple_maps'] = '';
   return shop;
-}
-
-function hasMapProviderEdit_(input) {
-  return Object.prototype.hasOwnProperty.call(input, 'city') ||
-    Object.prototype.hasOwnProperty.call(input, 'country') ||
-    Object.prototype.hasOwnProperty.call(input, 'country_code') ||
-    Object.prototype.hasOwnProperty.call(input, 'google_maps') ||
-    Object.prototype.hasOwnProperty.call(input, 'apple_maps');
 }
 
 function countryCodeForCity_(city) {
@@ -1299,8 +1356,9 @@ function roundCoordinate_(value) {
 }
 
 function toNumber_(value) {
-  if (value === '' || value === null || typeof value === 'undefined') return NaN;
-  return Number(value);
+  if (typeof value === 'number') return value;
+  return typeof value === 'string' && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())
+    ? Number(value) : NaN;
 }
 
 function toBoolean_(value, fallback) {
@@ -1334,30 +1392,55 @@ function safeDecode_(value) {
   }
 }
 
-function normalizeUrl_(url) {
-  if (/^https:\/\/maps\.apple\.com(?:\/|\?)/i.test(String(url || ''))) {
-    const id = getQueryParameter_(String(url), 'place-id');
-    if (id) return 'apple-place:' + id;
-    const point = extractAppleCoordinates_(String(url));
-    if (point) return 'apple-point:' + point.latitude + ',' + point.longitude;
-    return String(url || '').trim().replace(/#.*$/, '');
+function googleMapsData_(url) {
+  const path = url.split(/[?#]/, 1)[0];
+  const data = path.match(/\/data=([^/]+)/i);
+  return (data ? safeDecode_(data[1]) : '') + ' ' + getQueryParameter_(url, 'data');
+}
+
+function mapPlaceId_(url) {
+  if (/^https:\/\/maps\.apple\.com(?:\/|\?)/i.test(url)) {
+    const id = getQueryParameter_(url, 'place-id');
+    return id ? 'apple-place:' + id : '';
   }
-  return String(url || '').trim().replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase();
+
+  const queryId = getQueryParameter_(url, 'query_place_id') || getQueryParameter_(url, 'place_id');
+  const q = getQueryParameter_(url, 'q');
+  const data = googleMapsData_(url);
+  const dataId = data.match(/!1s(ChI[A-Za-z0-9_-]+|0x[\da-f]+:0x[\da-f]+)(?=!|\/|\s|$)/i);
+  const id = queryId || (/^place_id:/i.test(q) && q.slice('place_id:'.length)) ||
+    getQueryParameter_(url, 'ftid') || (dataId && dataId[1]);
+  if (id) {
+    return /^0x[\da-f]+:0x[\da-f]+$/i.test(id)
+      ? 'google-feature:' + id.toLowerCase() : 'google-place:' + id;
+  }
+  const cid = getQueryParameter_(url, 'cid') || getQueryParameter_(url, 'ludocid');
+  return /^\d+$/.test(cid) ? 'google-cid:' + cid : '';
 }
 
-function normalizeName_(name) {
-  return String(name || '').toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, '');
+function normalizeUrl_(url) {
+  const value = cleanText_(url);
+  return mapPlaceId_(value) || value;
 }
 
-function haversineMeters_(lat1, lon1, lat2, lon2) {
-  const radius = 6371000;
-  const toRadians = function (degrees) { return degrees * Math.PI / 180; };
-  const deltaLat = toRadians(Number(lat2) - Number(lat1));
-  const deltaLon = toRadians(Number(lon2) - Number(lon1));
-  const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(toRadians(Number(lat1))) * Math.cos(toRadians(Number(lat2))) *
-    Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+function sameMerchantLink_(a, b, field) {
+  if (a === b || normalizeUrl_(a) === normalizeUrl_(b)) return true;
+  const idA = mapPlaceId_(a);
+  const idB = mapPlaceId_(b);
+  if (idA && idB) return false;
+
+  const apple = field === 'apple_maps';
+  const name = url => apple ? getQueryParameter_(url, 'name') : extractPlaceName_(url);
+  const label = locationLabel_(name(a));
+  if (!label || label !== locationLabel_(name(b))) return false;
+
+  const pin = url => apple ? extractAppleCoordinates_(url) : extractCoordinates_(url);
+  try {
+    // Require the same labeled pin when one or both links lack an ID.
+    return samePoint_(pin(a), pin(b));
+  } catch (_) {
+    return false;
+  }
 }
 
 function jsonOutput_(payload) {
