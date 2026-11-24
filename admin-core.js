@@ -221,6 +221,7 @@
     fields.forEach(field => {
       if (form.elements[field]) form.elements[field].value = shop[field] ?? '';
     });
+    window.CoffeeMapCities?.syncForm(form, shop);
     $('#editPlaceDialog').showModal();
   }
 
@@ -230,6 +231,7 @@
     const button = $('#saveEditButton');
     const data = Object.fromEntries(new FormData(form).entries());
     data.id = form.dataset.shopId;
+    if (!window.CoffeeMapLocationCatalog.hasCoordinates(data)) return showToast('请输入有效的经纬度');
     data.latitude = Number(data.latitude);
     data.longitude = Number(data.longitude);
     data.active = true;
@@ -295,6 +297,7 @@
   }
 
   function bindSettingsEvents() {
+    window.addEventListener('coffee-map:data-updated', () => refreshShopIndex());
     window.addEventListener('coffee-map:city-change', () => {
       closeSwipeRows();
       refreshShopIndex();

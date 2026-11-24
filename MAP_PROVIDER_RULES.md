@@ -33,13 +33,15 @@
 - `google_maps` 必须是 HTTPS Google Maps 链接，包括 `maps.app.goo.gl`、`google.com/maps` 或 Google Maps 的地区域名。
 - `apple_maps` 必须是 `maps.apple.com` 的 HTTPS 链接。
 - 解析时可以跟随短链接重定向，但最终保存的链接仍须对应同一个具体商户资料。
-- 链接服务商与所提交城市不一致时，解析器必须拒绝该链接。
+- 链接服务商与解析所得国家／地区的规则不一致时，解析器必须拒绝该链接。
 
 ## API 约定
 
 Apps Script API 必须独立执行本规则，不能只依赖前端校验。
 
-### Parse
+### Parse（API v7）
+
+新增表单使用统一链接输入框，根据 URL 选择一个请求字段。当前地图城市不参与解析或服务商校验。
 
 Google example（城市不需要预注册）：
 
@@ -47,8 +49,6 @@ Google example（城市不需要预注册）：
 {
   "action": "parse",
   "data": {
-    "city": "Seoul",
-    "country_code": "KR",
     "google_maps": "https://maps.app.goo.gl/..."
   }
 }
@@ -60,8 +60,6 @@ Apple example（适用于所有中国内地城市）：
 {
   "action": "parse",
   "data": {
-    "city": "Xi'an",
-    "country_code": "CN",
     "apple_maps": "https://maps.apple.com/place?..."
   }
 }
@@ -69,7 +67,7 @@ Apple example（适用于所有中国内地城市）：
 
 解析结果必须尽可能输出并保留规范化的 `city`、`country`、`country_code`、`region`、`district`、`latitude`、`longitude`，并且只返回该国家／地区允许的地图链接字段。前端将这些字段视为 canonical data，不通过坐标或地址覆盖它们。
 
-如果解析器无法可靠确定 `city`、`country` 或 `country_code`，必须返回空值或明确的不完整状态，交由人工确认；不得猜测为 Hong Kong、Tokyo 或 Beijing。
+如果无法可靠确定 `city`、`country`、`country_code` 或有效坐标，前端显示错误并要求重新解析，避免把商户归入当前城市。
 
 ### Add and update
 

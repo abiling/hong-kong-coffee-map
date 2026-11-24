@@ -3,7 +3,8 @@
 
   const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const ADMIN_KEY_STORAGE = 'hk-coffee-admin-key-v2';
-  const ALL_DATA_CACHE_KEY = 'coffee-map-all-data-v3';
+  const Catalog = window.CoffeeMapLocationCatalog;
+  const { ALL_DATA_CACHE_KEY } = Catalog;
   const CLOUD_CACHE_TTL_MS = 15 * 60 * 1000;
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
@@ -20,7 +21,8 @@
     cloudMeta: $('#cloudMeta'), adminKeyInput: $('#adminKeyInput'), parseButton: $('#parsePlaceButton'),
     parseState: $('#parseState'), savePlaceButton: $('#savePlaceButton')
   };
-  const cloudLoads = new Map();
+  let allDataCache, cloudLoad = null;
+  let parsedAddPlace = null, parseRevision = 0;
 
   window.CoffeeMapData = Object.freeze({
     load: getCloudPayload,
@@ -30,6 +32,7 @@
     invalidate: invalidateCityCache
   });
 
+  try { localStorage.removeItem('coffee-map-all-data-v3'); } catch (_) {}
   trackLayout();
   initMap();
   bindEvents();
@@ -172,24 +175,23 @@
   }
 
   function readAllDataCache() {
+    if (allDataCache !== undefined) return allDataCache;
     try {
       const cached = JSON.parse(localStorage.getItem(ALL_DATA_CACHE_KEY) || 'null');
-      if (!cached || !Array.isArray(cached.shops)) return null;
-      return { ...cached, ok: true, from_cache: true };
-    } catch (_) {
-      localStorage.removeItem(ALL_DATA_CACHE_KEY);
-      return null;
-    }
+      if (Array.isArray(cached?.shops)) return allDataCache = { ...cached, ok: true, from_cache: true };
+    } catch (_) {}
+    return allDataCache = null;
   }
 
   function writeAllDataCache(payload, cachedAt = new Date().toISOString()) {
-    if (!payload || !Array.isArray(payload.shops)) return;
+    const snapshot = {
+      shops: payload.shops,
+      updated_at: payload.updated_at || new Date().toISOString(),
+      cached_at: cachedAt
+    };
+    allDataCache = { ...snapshot, ok: true, from_cache: true };
     try {
-      localStorage.setItem(ALL_DATA_CACHE_KEY, JSON.stringify({
-        shops: payload.shops,
-        updated_at: payload.updated_at || new Date().toISOString(),
-        cached_at: cachedAt
-      }));
+      localStorage.setItem(ALL_DATA_CACHE_KEY, JSON.stringify(snapshot));
     } catch (error) {
       console.warn('Persistent cloud cache write failed:', error);
     }
@@ -221,46 +223,54 @@
   }
 
   function invalidateCityCache() {
+    allDataCache = null;
     localStorage.removeItem(ALL_DATA_CACHE_KEY);
   }
 
   function upsertCachedShop(rawShop) {
     if (!rawShop?.id) return;
-    const cached = readAllDataCache();
-    if (!cached) return;
-    const nextShops = [...cached.shops];
-    const index = nextShops.findIndex(shop => String(shop.id) === String(rawShop.id));
-    if (index >= 0) nextShops[index] = rawShop;
-    else nextShops.push(rawShop);
-    writeAllDataCache({ shops: nextShops, updated_at: new Date().toISOString() }, cached.cached_at);
+    changeCachedShop(rawShop.id, rawShop);
   }
 
   function removeCachedShop(id) {
+    changeCachedShop(id, null);
+  }
+
+  function changeCachedShop(id, shop) {
+    id = String(id);
+    cloudLoad?.changes.set(id, shop);
     const cached = readAllDataCache();
-    if (!cached) return;
-    writeAllDataCache({
-      shops: cached.shops.filter(shop => String(shop.id) !== String(id)),
-      updated_at: new Date().toISOString()
-    }, cached.cached_at);
+    if (!cached && !shop) return;
+    const nextShops = [...(cached?.shops || [])];
+    applyShopChange(nextShops, shop, id);
+    writeAllDataCache({ shops: nextShops }, cached?.cached_at ?? null);
+  }
+
+  function applyShopChange(records, shop, id) {
+    const index = records.findIndex(record => String(record?.id) === id);
+    if (index < 0 && shop) records.push(shop);
+    else if (index >= 0 && shop) records[index] = shop;
+    else if (index >= 0) records.splice(index, 1);
   }
 
   async function fetchAllCloudPayload() {
-    const loadKey = 'all';
-    if (cloudLoads.has(loadKey)) return cloudLoads.get(loadKey);
-    const request = (async () => {
+    if (cloudLoad) return cloudLoad.promise;
+    const changes = new Map();
+    const promise = (async () => {
       const query = new URLSearchParams({ action: 'list', _: String(Date.now()) });
       const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
+      changes.forEach((shop, id) => applyShopChange(payload.shops, shop, id));
       const cachedAt = new Date().toISOString();
       writeAllDataCache(payload, cachedAt);
       return { ...payload, cached_at: cachedAt, from_cache: false };
     })();
-    cloudLoads.set(loadKey, request);
+    cloudLoad = { promise, changes };
     try {
-      return await request;
+      return await promise;
     } finally {
-      if (cloudLoads.get(loadKey) === request) cloudLoads.delete(loadKey);
+      cloudLoad = null;
     }
   }
 
@@ -271,7 +281,8 @@
   }
 
   function applyCloudPayload(payload, { fit = false } = {}) {
-    shops = payload.shops.map(normalizeShop).filter(s => s.active && s.id && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+    shops = payload.shops.map(normalizeShop)
+      .filter(shop => shop.active && shop.id && Number.isFinite(shop.latitude) && Number.isFinite(shop.longitude));
     const meta = payload.from_cache
       ? `${shops.length} 家 · 本地缓存`
       : `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`;
@@ -323,12 +334,14 @@
 
   function normalizeShop(raw) {
     const location = window.CoffeeMapCities?.normalizeLocationFields(raw) || raw;
+    const validCoordinates = Catalog.hasCoordinates(raw);
     return {
       id: String(raw.id || ''), name: String(raw.name || ''), address: String(raw.address || ''),
       city: String(location.city || ''), country: String(location.country || ''),
       country_code: String(location.country_code || ''),
       region: String(raw.region || ''), district: String(raw.district || ''),
-      latitude: Number(raw.latitude), longitude: Number(raw.longitude), googleMaps: String(raw.google_maps || ''),
+      latitude: validCoordinates ? Number(raw.latitude) : NaN,
+      longitude: validCoordinates ? Number(raw.longitude) : NaN, googleMaps: String(raw.google_maps || ''),
       appleMaps: String(raw.apple_maps || ''), category: String(raw.category || ''),
       source: String(raw.source || ''), notes: String(raw.notes || ''), active: raw.active !== false,
       favorite: toBoolean(raw.favorite)
@@ -525,7 +538,7 @@
     $('#addButton').addEventListener('click', () => { resetAddForm(); els.addDialog.showModal(); });
     $('#closeAddDialog').addEventListener('click', () => els.addDialog.close());
     els.parseButton.addEventListener('click', parsePlaceLink);
-    ['google_maps', 'apple_maps'].forEach(field => els.addForm.elements[field]?.addEventListener('input', markPlaceLinkChanged));
+    els.addForm.elements.map_link.addEventListener('input', markPlaceLinkChanged);
     els.addForm.addEventListener('submit', saveNewShop);
     $('#useMapCenter').addEventListener('click', () => { if (!map) return; const c = map.getCenter(); els.addForm.elements.latitude.value = c.lat.toFixed(7); els.addForm.elements.longitude.value = c.lng.toFixed(7); });
     $('#favoriteButton').addEventListener('click', toggleFavorite);
@@ -546,7 +559,7 @@
     const config = event.detail?.config || window.CoffeeMapCities?.getCity(city, countryCode);
     const cachedCity = readCityCache(city, countryCode);
     const hasCachedShops = cachedCity?.shops?.some(shop => shop.active !== false
-      && Number.isFinite(Number(shop.latitude)) && Number.isFinite(Number(shop.longitude)));
+      && window.CoffeeMapLocationCatalog.hasCoordinates(shop));
     activeRegion = '全部';
     activeDistrict = '全部';
     selectedId = null;
@@ -576,7 +589,8 @@
     const currentCity = activeCityName();
     const updated = normalizeShop(rawShop);
     const index = shops.findIndex(shop => shop.id === updated.id);
-    const belongsToCurrentLocation = updated.city === currentCity && updated.country_code === activeCountryCode();
+    const belongsToCurrentLocation = updated.active && Number.isFinite(updated.latitude) && Number.isFinite(updated.longitude)
+      && updated.city === currentCity && updated.country_code === activeCountryCode();
     if (!belongsToCurrentLocation) {
       if (index >= 0) shops.splice(index, 1);
     } else if (index >= 0) {
@@ -607,47 +621,70 @@
   }
 
   async function parsePlaceLink() {
-    const city = els.addForm.elements.city?.value || window.CoffeeMapCities?.activeCity || '';
-    const formCountryCode = els.addForm.elements.country_code?.value || activeCountryCode();
-    const location = window.CoffeeMapCities?.getCity(city, formCountryCode) || window.CoffeeMapCities?.activeConfig;
-    const field = window.CoffeeMapCities?.getMapField(location) || 'google_maps';
-    const provider = field === 'apple_maps' ? 'Apple Maps' : 'Google Maps';
-    const url = els.addForm.elements[field]?.value.trim();
-    if (!url) return showToast(`请先粘贴 ${provider} 链接`);
-    if (window.CoffeeMapCities && !window.CoffeeMapCities.validateMapUrl(field === 'apple_maps' ? 'apple' : 'google', url)) return showToast(`这不是有效的 ${provider} 商户链接`);
+    const cities = window.CoffeeMapCities;
+    const url = els.addForm.elements.map_link.value.trim();
+    const provider = cities.detectMapProvider(url);
+    if (!provider) return showToast(url ? '请提供有效的 Google Maps 或 Apple Maps 商户链接' : '请先粘贴地图商户链接');
+    const revision = ++parseRevision;
+    parsedAddPlace = null;
     els.parseButton.disabled = true; els.parseButton.textContent = '解析中…'; els.parseState.textContent = '正在解析地点…';
+    els.parseState.className = '';
     try {
-      const countryCode = location?.countryCode || formCountryCode;
-      const { place } = await apiPost('parse', { city, country_code: countryCode, [field]: url });
-      ['google_maps','apple_maps','name','address','region','district','latitude','longitude','category','source','notes','city','country','country_code'].forEach(f => { if (place?.[f] !== undefined && els.addForm.elements[f]) els.addForm.elements[f].value = place[f] ?? ''; });
-      window.CoffeeMapCities?.syncForm(els.addForm, place || location);
+      const { place } = await apiPost('parse', { [cities.providers[provider].field]: url });
+      if (revision !== parseRevision || !els.addDialog.open) return;
+      if (!Catalog.isCompleteLocation(place) || !Catalog.hasCoordinates(place)) {
+        throw new Error('无法确认商户所属国家、城市或有效坐标，请检查链接后重新解析');
+      }
+      const location = Catalog.canonicalLocation(place);
+      const expectedProvider = cities.getMapProvider(location);
+      if (provider !== expectedProvider) {
+        throw new Error(`${location.city} 的商户请提供 ${cities.providers[expectedProvider].label} 链接`);
+      }
+      ['name','address','region','district','latitude','longitude','category','source','notes'].forEach(field => {
+        els.addForm.elements[field].value = location[field] ?? '';
+      });
+      cities.syncForm(els.addForm, location);
+      parsedAddPlace = { url, provider, city: location.city, countryCode: location.country_code };
       els.parseState.textContent = '解析完成，请确认并按需修改'; els.parseState.className = 'success';
-    } catch (error) { els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message); }
+    } catch (error) {
+      if (revision !== parseRevision || !els.addDialog.open) return;
+      els.parseState.textContent = error.message; els.parseState.className = 'error'; showToast(error.message);
+    }
     finally { els.parseButton.disabled = false; els.parseButton.textContent = '解析地点'; }
   }
 
   async function saveNewShop(event) {
-    event.preventDefault(); const fd = new FormData(els.addForm);
+    event.preventDefault();
+    if (els.savePlaceButton.disabled) return;
+    const fd = new FormData(els.addForm);
     const data = Object.fromEntries([...fd.entries()].map(([k,v]) => [k, String(v).trim()]));
+    if (!parsedAddPlace || data.map_link !== parsedAddPlace.url || data.city !== parsedAddPlace.city
+      || data.country_code !== parsedAddPlace.countryCode) return showToast('请先解析地图商户链接并确认解析所得城市');
+    if (!Catalog.hasCoordinates(data)) return showToast('请输入有效的经纬度');
+    const cities = window.CoffeeMapCities;
+    data[cities.providers[parsedAddPlace.provider].field] = data.map_link;
+    delete data.map_link;
     data.latitude = Number(data.latitude); data.longitude = Number(data.longitude); data.active = true;
     data.status = '想去'; // Keep the existing Sheet schema compatible; status is no longer a user-facing feature.
     data.favorite = false;
-    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data) || { requiredField: 'google_maps' };
-    const completeLocation = window.CoffeeMapLocationCatalog?.isCompleteLocation(data) ?? Boolean(data.city && data.country && data.country_code);
-    if (!completeLocation || !data[mapRule.requiredField] || mapRule.valid === false || !data.name || !data.address || !data.region || !data.district || !Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return showToast('请先解析并确认所有必填信息');
+    const mapRule = cities.applyMapProviderRule(data, data);
+    if (!Catalog.isCompleteLocation(data) || !mapRule.valid || !data.name || !data.address || !data.region || !data.district) return showToast('请先解析并确认所有必填信息');
     els.savePlaceButton.disabled = true; els.savePlaceButton.textContent = '正在保存…';
     try {
-      const { shop } = await apiPost('add', data); const added = normalizeShop(shop);
+      const { shop } = await apiPost('add', data);
+      if (!shop?.id || !Catalog.isCompleteLocation(shop)) throw new Error('云端未返回完整的店铺资料，请重新同步确认');
+      const added = Catalog.canonicalLocation(shop);
       window.CoffeeMapData.upsert(shop);
+      els.addDialog.close();
       if (added.city !== activeCityName() || added.country_code !== activeCountryCode()) {
-        els.addDialog.close();
-        window.CoffeeMapCities?.setActiveCity(added.city, added.country_code);
+        cities.setActiveCity(added.city, added.country_code);
         showToast('已保存到云端');
         return;
       }
-      shops.push(added);
-      window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
-      renderDistricts(); applyFilters(); els.addDialog.close(); selectShop(added.id, true); setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`); showToast('已保存到云端');
+      applyShopUpdate(shop);
+      if (Catalog.hasCoordinates(shop)) selectShop(String(added.id), true);
+      setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`);
+      showToast('已保存到云端');
     } catch (error) { showToast(error.message); }
     finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端'; }
   }
@@ -659,15 +696,15 @@
     button.disabled = true;
     try {
       const { shop } = await apiPost('setFavorite', { id: current.id, favorite: !current.favorite });
-      const updated = normalizeShop(shop);
-      const index = shops.findIndex(item => item.id === updated.id);
-      if (index >= 0) shops[index] = updated;
+      const favorite = toBoolean(shop.favorite);
       window.CoffeeMapData.upsert(shop);
-      renderFavoriteAction(updated);
-      applyFilters();
-      if (activeView === 'saved' && !updated.favorite) closeSheet(els.detailSheet);
+      applyShopUpdate(shop);
+      if (selectedId === String(shop.id)) {
+        renderFavoriteAction({ favorite });
+        if (activeView === 'saved' && !favorite) closeSheet(els.detailSheet);
+      }
       setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`);
-      showToast(updated.favorite ? '已加入收藏' : '已取消收藏');
+      showToast(favorite ? '已加入收藏' : '已取消收藏');
     } catch (error) {
       showToast(error.message);
     } finally {
@@ -689,10 +726,11 @@
   }
   function resetAddForm() {
     els.addForm.reset();
+    parsedAddPlace = null;
+    parseRevision += 1;
     els.parseState.className = '';
     window.CoffeeMapCities?.syncForm(els.addForm, window.CoffeeMapCities.activeConfig);
-    const provider = els.addForm.dataset.mapProvider === 'apple' ? 'Apple Maps' : 'Google Maps';
-    els.parseState.textContent = `粘贴具体 ${provider} 商户链接后解析`;
+    els.parseState.textContent = '粘贴具体商户链接后解析';
   }
   function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
@@ -701,7 +739,12 @@
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
   function closeSheet(el) { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
-  function markPlaceLinkChanged() { els.parseState.textContent = '链接已更改，请重新解析'; els.parseState.className = ''; }
+  function markPlaceLinkChanged() {
+    parsedAddPlace = null;
+    parseRevision += 1;
+    els.parseState.textContent = '链接已更改，请重新解析';
+    els.parseState.className = '';
+  }
   function setMapAction(button, shouldShow, href) {
     if (!button) return;
     const visible = Boolean(shouldShow && href);
@@ -715,5 +758,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=38').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=39').catch(() => {});
 })();

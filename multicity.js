@@ -7,7 +7,6 @@
   const CITY_STORAGE_KEY = 'coffee-map-active-city-v1';
   const COUNTRY_STORAGE_KEY = 'coffee-map-active-country-v1';
   const COUNTRY_CITY_STORAGE_PREFIX = 'coffee-map-country-city-v1:';
-  const ALL_DATA_CACHE_KEY = 'coffee-map-all-data-v3';
   const API_MARKER = 'script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const PROVIDERS = Object.freeze({
     google: Object.freeze({ field: 'google_maps', label: 'Google Maps', placeholder: 'https://maps.app.goo.gl/…' }),
@@ -40,8 +39,7 @@
     })
   });
 
-  let catalogRecords = readCachedRecords();
-  let catalog = Catalog.buildCatalog(catalogRecords, DISPLAY_OVERRIDES);
+  let catalog = Catalog.buildCatalog(readCachedRecords(), DISPLAY_OVERRIDES);
   let activeLocationKey = resolveInitialLocationKey();
   let activeConfig = catalog.locations[activeLocationKey] || provisionalLocation();
   let activeCity = activeConfig.city;
@@ -59,6 +57,7 @@
     providers: PROVIDERS,
     applyMapProviderRule,
     citiesForCountry,
+    detectMapProvider,
     getCity,
     getLocation,
     getMapField,
@@ -79,12 +78,11 @@
   renderRegionRail();
   enhanceAddForm();
   watchForEditForm();
-  patchDialogOpen();
   updateDocumentMetadata();
 
   function readCachedRecords() {
     try {
-      const payload = JSON.parse(localStorage.getItem(ALL_DATA_CACHE_KEY) || 'null');
+      const payload = JSON.parse(localStorage.getItem(Catalog.ALL_DATA_CACHE_KEY) || 'null');
       return Array.isArray(payload?.shops) ? payload.shops : [];
     } catch (_) {
       return [];
@@ -118,8 +116,7 @@
   }
 
   function updateCatalog(records = [], { dispatch = true } = {}) {
-    catalogRecords = Array.isArray(records) ? records.map(Catalog.canonicalLocation) : [];
-    catalog = Catalog.buildCatalog(catalogRecords, DISPLAY_OVERRIDES);
+    catalog = Catalog.buildCatalog(records, DISPLAY_OVERRIDES);
     const previousKey = activeLocationKey;
 
     if (!catalog.locations[activeLocationKey]) {
@@ -129,7 +126,8 @@
       const storedCityMatch = Object.values(catalog.locations).find(location => location.city === storedCity);
       activeLocationKey = catalog.locations[storedKey]
         ? storedKey
-        : storedCityMatch?.key || catalog.countryCodes.flatMap(code => catalog.countries[code].locationKeys)[0];
+        : storedCityMatch?.key || catalog.countryCodes.flatMap(code => catalog.countries[code].locationKeys)[0]
+          || previousKey;
     }
 
     if (activeLocationKey && catalog.locations[activeLocationKey]) applyActiveConfig(catalog.locations[activeLocationKey], { persist: false });
@@ -199,6 +197,10 @@
     } catch (_) {
       return false;
     }
+  }
+
+  function detectMapProvider(value) {
+    return Object.keys(PROVIDERS).find(provider => validateMapUrl(provider, value));
   }
 
   function patchMapDefaults() {
@@ -382,11 +384,6 @@
     const form = document.querySelector('#addForm');
     if (!form) return;
     enhanceLocationFields(form, activeConfig);
-    const parseState = document.querySelector('#parseState');
-    if (!parseState) return;
-    new MutationObserver(() => {
-      if (parseState.classList.contains('success')) syncFormLocation(form, readFormLocation(form));
-    }).observe(parseState, { childList: true, attributes: true, subtree: true });
   }
 
   function watchForEditForm() {
@@ -405,7 +402,7 @@
     const regionLabel = regionField?.closest('label');
     if (!districtLabel || !regionField || !regionLabel) return;
     const cityLabel = document.createElement('label');
-    cityLabel.innerHTML = `<span>城市 *</span><select name="city" required>${cityOptions(defaultLocation?.city)}</select>`;
+    cityLabel.innerHTML = '<span>城市 *</span><select name="city" required></select>';
     const countryLabel = document.createElement('label');
     countryLabel.innerHTML = `<span>国家／地区</span><input name="country" type="text" readonly value="${escapeHtml(defaultLocation?.country || '')}" />`;
     districtLabel.parentNode.insertBefore(cityLabel, districtLabel);
@@ -416,10 +413,11 @@
       countryCodeInput.name = 'country_code';
       form.appendChild(countryCodeInput);
     }
-    const regionSelect = document.createElement('select');
-    regionSelect.name = 'region';
-    regionSelect.required = true;
-    regionField.replaceWith(regionSelect);
+    const regionOptions = document.createElement('datalist');
+    regionOptions.id = `${form.id}-region-options`;
+    regionField.setAttribute('list', regionOptions.id);
+    regionField.placeholder = '选择或输入行政区';
+    regionField.after(regionOptions);
     form.dataset.multicityEnhanced = 'true';
     syncFormLocation(form, defaultLocation);
     cityLabel.querySelector('select').addEventListener('change', event => {
@@ -442,8 +440,7 @@
     const citySelect = form.elements.city;
     const countryInput = form.elements.country;
     const countryCodeInput = form.elements.country_code;
-    const regionSelect = form.elements.region;
-    const currentRegion = clearRegion ? '' : String(supplied?.region || regionSelect?.value || '');
+    const regionField = form.elements.region;
     if (citySelect) {
       citySelect.innerHTML = cityOptions(location.city, location.countryCode);
       let targetOption = [...citySelect.options].find(option => option.value === location.city
@@ -458,10 +455,15 @@
       }
       targetOption.selected = true;
     }
-    if (countryInput) countryInput.value = location.country;
+    if (countryInput) countryInput.value = supplied?.country || location.country;
     if (countryCodeInput) countryCodeInput.value = location.countryCode;
-    if (regionSelect) fillRegionSelect(regionSelect, location, currentRegion);
-    const regionLabel = regionSelect?.closest('label')?.querySelector('span');
+    if (regionField) {
+      const regions = Catalog.orderedValues(location.regions, location.regionOrder);
+      const options = form.querySelector('datalist');
+      if (options) options.innerHTML = regions.map(region => `<option value="${escapeHtml(region)}"></option>`).join('');
+      regionField.value = clearRegion ? '' : (supplied?.region || regionField.value);
+    }
+    const regionLabel = regionField?.closest('label')?.querySelector('span');
     if (regionLabel) regionLabel.textContent = location.countryCode === 'HK' ? '大区 *' : '行政区 *';
     syncMapProviderFields(form, location);
   }
@@ -479,6 +481,7 @@
   }
 
   function syncMapProviderFields(form, location) {
+    if (form.elements.map_link) return;
     const activeProvider = getMapProvider(location);
     Object.entries(PROVIDERS).forEach(([providerKey, provider]) => {
       const input = form.elements[provider.field];
@@ -490,16 +493,6 @@
       input.required = isActive;
       if (isActive) input.placeholder = provider.placeholder;
     });
-    form.dataset.mapProvider = activeProvider;
-    const parseState = form.querySelector('#parseState');
-    if (parseState && !parseState.classList.contains('success')) parseState.textContent = `粘贴具体 ${PROVIDERS[activeProvider].label} 商户链接后解析`;
-  }
-
-  function fillRegionSelect(select, location, selected = '') {
-    if (!select || !location) return;
-    const regions = Catalog.orderedValues([...(location.regions || []), selected], location.regionOrder || []);
-    select.innerHTML = '<option value="">请选择</option>' + regions.map(region => `<option value="${escapeHtml(region)}">${escapeHtml(region)}</option>`).join('');
-    select.value = selected || '';
   }
 
   function cityOptions(selectedCity = activeCity, selectedCountryCode = activeCountryCode) {
@@ -518,31 +511,8 @@
 
   function refreshEnhancedForms() {
     document.querySelectorAll('form[data-multicity-enhanced="true"]').forEach(form => {
-      const current = readFormLocation(form);
-      syncFormLocation(form, getLocation(current.city, current.country_code) || activeConfig);
+      if (!form.closest('dialog')?.open) syncFormLocation(form, activeConfig);
     });
-  }
-
-  function patchDialogOpen() {
-    const proto = window.HTMLDialogElement?.prototype;
-    if (!proto || proto.showModal.__coffeeMapCityAware) return;
-    const nativeShowModal = proto.showModal;
-    const cityAwareShowModal = function (...args) {
-      const form = this.querySelector('form');
-      if (form?.dataset.multicityEnhanced === 'true') syncFormLocation(form, this.id === 'addDialog' ? activeConfig : readFormLocation(form));
-      return nativeShowModal.apply(this, args);
-    };
-    cityAwareShowModal.__coffeeMapCityAware = true;
-    proto.showModal = cityAwareShowModal;
-  }
-
-  function readFormLocation(form) {
-    return {
-      city: form.elements.city?.value, country: form.elements.country?.value,
-      country_code: form.elements.country_code?.value, region: form.elements.region?.value,
-      district: form.elements.district?.value, address: form.elements.address?.value,
-      latitude: form.elements.latitude?.value, longitude: form.elements.longitude?.value
-    };
   }
 
   function updateDocumentMetadata() {

@@ -6,12 +6,14 @@
   'use strict';
 
   const UNKNOWN_LOCATION_KEY = 'unknown';
+  const ALL_DATA_CACHE_KEY = 'coffee-map-all-data-v4';
 
   function clean(value) {
     return String(value ?? '').trim();
   }
 
   function canonicalLocation(record = {}) {
+    record = record ?? {};
     return {
       ...record,
       city: clean(record.city),
@@ -33,8 +35,13 @@
     return code && canonicalCity ? `${code}::${canonicalCity}` : UNKNOWN_LOCATION_KEY;
   }
 
-  function hasCoordinates(record = {}) {
-    return Number.isFinite(Number(record.latitude)) && Number.isFinite(Number(record.longitude));
+  function validCoordinate(value, limit) {
+    if (typeof value === 'string' && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())) value = Number(value);
+    return Number.isFinite(value) && Math.abs(value) <= limit;
+  }
+
+  function hasCoordinates(record) {
+    return validCoordinate(record?.latitude, 90) && validCoordinate(record?.longitude, 180);
   }
 
   function uniqueSorted(values) {
@@ -152,6 +159,7 @@
   }
 
   return Object.freeze({
+    ALL_DATA_CACHE_KEY,
     UNKNOWN_LOCATION_KEY,
     boundsForShops,
     buildCatalog,

@@ -24,7 +24,7 @@
   }
 
   if (!document.querySelector('script[data-multicity]')) {
-    const openTag = '<scr' + 'ipt src="./multicity.js?v=38" data-multicity="true">';
+    const openTag = '<scr' + 'ipt src="./multicity.js?v=39" data-multicity="true">';
     const closeTag = '</scr' + 'ipt>';
     document.write(openTag + closeTag);
   }

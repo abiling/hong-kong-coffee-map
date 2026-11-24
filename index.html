@@ -47,7 +47,7 @@
               try {
                 const city = String(localStorage.getItem('coffee-map-active-city-v1') || '').trim();
                 const countryCode = String(localStorage.getItem('coffee-map-active-country-v1') || '').trim().toUpperCase();
-                const cached = JSON.parse(localStorage.getItem('coffee-map-all-data-v3') || 'null');
+                const cached = JSON.parse(localStorage.getItem('coffee-map-all-data-v4') || 'null');
                 const shops = Array.isArray(cached?.shops) ? cached.shops : [];
                 const location = shops.find(shop => String(shop.city || '').trim() === city
                   && (!countryCode || String(shop.country_code || '').trim().toUpperCase() === countryCode));
@@ -162,8 +162,7 @@
       <div class="form-grid">
         <div class="full map-parse-group">
           <div class="map-parse-row">
-            <label class="primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required placeholder="https://maps.app.goo.gl/…" /></label>
-            <label class="primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" placeholder="https://maps.apple.com/place?…" disabled /></label>
+            <label class="primary-input"><span>地图商户链接 *</span><input name="map_link" type="url" required placeholder="Google Maps / Apple Maps" /></label>
             <button type="button" id="parsePlaceButton" class="parse-button">解析地点</button>
           </div>
           <span id="parseState" class="parse-state">粘贴具体商户链接后解析</span>
@@ -187,9 +186,9 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-  <script src="./location-catalog.js?v=38"></script>
-  <script src="./map-config.js?v=38"></script>
-  <script src="./app.js?v=38"></script>
-  <script src="./admin-core.js?v=38"></script>
+  <script src="./location-catalog.js?v=39"></script>
+  <script src="./map-config.js?v=39"></script>
+  <script src="./app.js?v=39"></script>
+  <script src="./admin-core.js?v=39"></script>
 </body>
 </html>
