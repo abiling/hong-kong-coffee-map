@@ -4,7 +4,6 @@
   const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const KEY_STORAGE = 'hk-coffee-admin-key-v2';
   const ACTION_WIDTH = 144;
-  let shopIndex = new Map();
   let openRow = null;
   let suppressClickUntil = 0;
 
@@ -14,35 +13,18 @@
 
   init();
 
-  async function init() {
+  function init() {
     installDetailAdminActions();
     installEditDialog();
     bindSettingsEvents();
     observeList();
-    await refreshShopIndex();
     enhanceRows();
-  }
-
-  async function refreshShopIndex({ force = false } = {}) {
-    try {
-      let payload;
-      if (window.CoffeeMapData?.load) {
-        payload = await window.CoffeeMapData.load({ force });
-      } else {
-        const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
-        payload = await response.json();
-      }
-      if (!payload.ok || !Array.isArray(payload.shops)) return;
-      shopIndex = new Map(payload.shops.filter(shop => shop.active !== false).map(shop => [String(shop.id), shop]));
-    } catch (error) {
-      console.warn('Admin data refresh failed:', error);
-    }
   }
 
   function observeList() {
     const list = $('#shopList');
     if (!list) return;
-    new MutationObserver(() => requestAnimationFrame(enhanceRows)).observe(list, { childList: true });
+    new MutationObserver(() => requestAnimationFrame(enhanceRows)).observe(list, { childList: true, subtree: true });
   }
 
   function enhanceRows() {
@@ -51,7 +33,7 @@
     const admin = hasKey();
     document.body.classList.toggle('admin-enabled', admin);
 
-    list.querySelectorAll(':scope > .shop-card').forEach(card => {
+    list.querySelectorAll(':scope > .shop-card, .saved-city > .shop-card').forEach(card => {
       const id = card.dataset.shopId;
       if (!id) return;
       const row = document.createElement('div');
@@ -164,23 +146,9 @@
     actions.className = 'detail-admin-actions';
     actions.innerHTML = '<button id="editSelectedButton" class="admin-action edit-action" type="button">编辑地点</button><button id="deleteSelectedButton" class="admin-action delete-action" type="button">删除地点</button>';
     detailActions.insertAdjacentElement('afterend', actions);
-    $('#editSelectedButton').addEventListener('click', () => {
-      const shop = resolveDetailShop();
-      if (shop) openEditor(shop.id);
-    });
-    $('#deleteSelectedButton').addEventListener('click', () => {
-      const shop = resolveDetailShop();
-      if (shop) archiveShop(shop.id);
-    });
-  }
-
-  function resolveDetailShop() {
-    const name = ($('#detailName')?.textContent || '').trim();
-    const address = ($('#detailAddress')?.textContent || '').trim();
-    const shop = [...shopIndex.values()].find(item => String(item.name).trim() === name && String(item.address).trim() === address)
-      || [...shopIndex.values()].find(item => String(item.name).trim() === name);
-    if (!shop) showToast('未能识别当前地点，请从列表左滑编辑');
-    return shop;
+    const selectedId = () => $('#detailSheet')?.dataset.shopId;
+    $('#editSelectedButton').addEventListener('click', () => openEditor(selectedId()));
+    $('#deleteSelectedButton').addEventListener('click', () => archiveShop(selectedId()));
   }
 
   function installEditDialog() {
@@ -213,7 +181,7 @@
 
   function openEditor(id) {
     if (!hasKey()) return showToast('请先设置管理员密钥');
-    const shop = shopIndex.get(String(id));
+    const shop = window.CoffeeMapData.getShop(id);
     if (!shop) return showToast('找不到这个地点');
     const form = $('#editPlaceForm');
     form.dataset.shopId = shop.id;
@@ -221,6 +189,7 @@
     fields.forEach(field => {
       if (form.elements[field]) form.elements[field].value = shop[field] ?? '';
     });
+    window.CoffeeMapCities?.syncForm(form, shop);
     $('#editPlaceDialog').showModal();
   }
 
@@ -230,25 +199,27 @@
     const button = $('#saveEditButton');
     const data = Object.fromEntries(new FormData(form).entries());
     data.id = form.dataset.shopId;
+    if (!window.CoffeeMapLocationCatalog.hasCoordinates(data)) return showToast('请输入有效的经纬度');
     data.latitude = Number(data.latitude);
     data.longitude = Number(data.longitude);
-    data.active = true;
-    data.status = shopIndex.get(String(data.id))?.status || '想去';
-    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data.city) || { requiredField: 'google_maps' };
-    if (!data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写当前城市指定的有效地图链接');
+    const mapRule = window.CoffeeMapCities?.applyMapProviderRule(data, data) || { requiredField: 'google_maps' };
+    const completeLocation = window.CoffeeMapLocationCatalog?.isCompleteLocation(data) ?? Boolean(data.city && data.country && data.country_code);
+    if (!completeLocation || !data[mapRule.requiredField] || mapRule.valid === false) return showToast('请填写完整地点资料和当前地区指定的有效地图链接');
     button.disabled = true;
     button.textContent = '正在保存…';
     try {
-      const previousCity = shopIndex.get(String(data.id))?.city || window.CoffeeMapCities?.activeCity;
+      const previousShop = window.CoffeeMapData.getShop(data.id);
+      if (!previousShop) throw new Error('找不到这个地点');
+      const { city: previousCity, country_code: previousCountryCode } = previousShop;
       const payload = await post('update', data);
-      shopIndex.set(String(payload.shop.id), payload.shop);
-      if (previousCity && previousCity !== payload.shop.city) {
-        window.CoffeeMapData?.remove(String(payload.shop.id), previousCity);
-      }
-      window.CoffeeMapData?.upsert(payload.shop);
+      if (String(payload.shop?.id) !== data.id) throw new Error('云端返回的店铺 ID 不匹配，请重新同步');
+      const current = window.CoffeeMapData.getShop(data.id);
+      if (!current) throw new Error('该地点已删除');
+      const shop = { ...payload.shop, favorite: current.favorite };
+      window.CoffeeMapData.upsert(shop);
       $('#editPlaceDialog').close();
       window.dispatchEvent(new CustomEvent('coffee-map:shop-updated', {
-        detail: { shop: payload.shop, previousCity }
+        detail: { shop, previousCity, previousCountryCode }
       }));
       showToast('地点资料已更新');
     } catch (error) {
@@ -260,16 +231,14 @@
   }
 
   async function archiveShop(id) {
-    const shop = shopIndex.get(String(id));
+    const shop = window.CoffeeMapData.getShop(id);
     if (!shop) return showToast('找不到这个地点');
     if (!confirm(`确定删除“${shop.name}”吗？\n\n该地点会从地图隐藏，但仍可在 Google Sheet 中将 active 改回 TRUE 恢复。`)) return;
     try {
-      const city = String(shop.city || window.CoffeeMapCities?.activeCity || 'Hong Kong');
       await post('archive', { id: String(id) });
-      shopIndex.delete(String(id));
-      window.CoffeeMapData?.remove(String(id), city);
+      window.CoffeeMapData.remove(id);
       window.dispatchEvent(new CustomEvent('coffee-map:shop-removed', {
-        detail: { id: String(id), city }
+        detail: { id: String(id) }
       }));
       showToast('地点已删除');
     } catch (error) {
@@ -292,16 +261,8 @@
   }
 
   function bindSettingsEvents() {
-    window.addEventListener('coffee-map:city-change', () => {
-      closeSwipeRows();
-      refreshShopIndex();
-    });
-    $('#refreshButton')?.addEventListener('click', () => refreshShopIndex({ force: true }));
-    $('#saveAdminKeyButton')?.addEventListener('click', () => setTimeout(() => {
-      enhanceRows();
-      refreshShopIndex();
-    }, 50));
-    $('#clearAdminKeyButton')?.addEventListener('click', () => setTimeout(enhanceRows, 50));
+    window.addEventListener('coffee-map:city-change', () => closeSwipeRows());
+    window.addEventListener('coffee-map:admin-key-updated', enhanceRows);
     $$('.nav-item').forEach(button => button.addEventListener('click', () => closeSwipeRows()));
     document.addEventListener('pointerdown', event => {
       if (!event.target.closest('.swipe-row')) closeSwipeRows();

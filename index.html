@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Coffee Shops" />
-  <title>Hong Kong SAR · Coffee Shops</title>
+  <title>Coffee Shops</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png" />
@@ -39,19 +39,24 @@
         <div class="brand-copy">
           <img class="brand-mark" src="icons/mark-cafe-shops.svg" width="76" height="20" alt="Cafe Shops" />
           <button id="cityButton" class="city-title-button" type="button" aria-haspopup="dialog" aria-controls="countrySheet">
-            <span data-country-label>Hong Kong SAR</span>
+            <span data-country-label>Coffee Shops</span>
             <span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>
           </button>
+          <h1 id="savedTitle" class="saved-title" hidden>收藏</h1>
           <script>
             (() => {
               try {
-                const city = localStorage.getItem('coffee-map-active-city-v1');
-                const countries = { 'Hong Kong': ['Hong Kong SAR', 'HK'], Tokyo: ['Japan', 'JP'], Beijing: ['China', 'CN'] };
-                if (!countries[city]) return;
-                document.querySelector('[data-country-label]').textContent = countries[city][0];
+                const city = String(localStorage.getItem('coffee-map-active-city-v1') || '').trim();
+                const countryCode = String(localStorage.getItem('coffee-map-active-country-v1') || '').trim().toUpperCase();
+                const cached = JSON.parse(localStorage.getItem('coffee-map-all-data-v4') || 'null');
+                const shops = Array.isArray(cached?.shops) ? cached.shops : [];
+                const location = shops.find(shop => String(shop.city || '').trim() === city
+                  && (!countryCode || String(shop.country_code || '').trim().toUpperCase() === countryCode));
+                if (!location?.country || !location?.country_code) return;
+                document.querySelector('[data-country-label]').textContent = String(location.country).trim();
                 document.documentElement.dataset.city = city.toLowerCase().replace(/\s+/g, '-');
-                document.documentElement.dataset.country = countries[city][1].toLowerCase();
-                document.title = countries[city][0] + ' · Coffee Shops';
+                document.documentElement.dataset.country = String(location.country_code).trim().toLowerCase();
+                document.title = String(location.country).trim() + ' · ' + document.querySelector('meta[name="apple-mobile-web-app-title"]').content;
               } catch (_) {}
             })();
           </script>
@@ -78,7 +83,7 @@
       <aside id="listPanel" class="list-panel">
         <div class="list-handle"></div>
         <div class="list-head">
-          <div><p class="list-kicker">当前结果</p><h2><span id="resultCount">—</span> 家咖啡店</h2></div>
+          <div><p class="list-kicker" id="listKicker">当前结果</p><p class="list-kicker" id="savedSummary" hidden>共收藏 <span id="savedCount">0</span> 家</p><h2><span id="resultCount">—</span> 家咖啡店</h2></div>
           <button id="fitButton" class="text-button">显示全部</button>
         </div>
         <div id="shopList" class="shop-list"><div class="empty-state">正在从云端加载…</div></div>
@@ -158,8 +163,7 @@
       <div class="form-grid">
         <div class="full map-parse-group">
           <div class="map-parse-row">
-            <label class="primary-input map-provider-field" data-map-provider-field="google"><span>Google Maps 链接 *</span><input name="google_maps" type="url" required placeholder="https://maps.app.goo.gl/…" /></label>
-            <label class="primary-input map-provider-field" data-map-provider-field="apple" hidden><span>Apple Maps 链接 *</span><input name="apple_maps" type="url" placeholder="https://maps.apple.com/place?…" disabled /></label>
+            <label class="primary-input"><span>地图商户链接 *</span><input name="map_link" type="url" required placeholder="Google Maps / Apple Maps" /></label>
             <button type="button" id="parsePlaceButton" class="parse-button">解析地点</button>
           </div>
           <span id="parseState" class="parse-state">粘贴具体商户链接后解析</span>
@@ -183,8 +187,9 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-  <script src="./map-config.js?v=36"></script>
-  <script src="./app.js?v=37"></script>
-  <script src="./admin-core.js?v=36"></script>
+  <script src="./location-catalog.js?v=41"></script>
+  <script src="./map-config.js?v=41"></script>
+  <script src="./app.js?v=41"></script>
+  <script src="./admin-core.js?v=41"></script>
 </body>
 </html>

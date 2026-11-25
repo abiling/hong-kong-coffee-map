@@ -1,0 +1,93 @@
+.country-option-group {
+  display: block !important;
+}
+
+.country-option-group + .country-option-group {
+  border-top: 1px solid rgba(23, 23, 19, .1) !important;
+}
+
+.country-option-group > .country-option {
+  border-bottom: 0 !important;
+}
+
+.country-city-option {
+  min-height: 44px !important;
+  padding: 6px 4px !important;
+  border-bottom: 0 !important;
+}
+
+.country-city-option > span {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: baseline !important;
+  gap: 2px 8px !important;
+  overflow-wrap: anywhere;
+}
+
+.country-city-option strong {
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
+
+.country-city-option small {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.country-option[aria-expanded="false"] .country-chevron {
+  transform: rotate(-90deg);
+}
+
+.saved-title {
+  margin: 0;
+  font-size: var(--primary-title-size);
+  font-weight: 600;
+  line-height: 1;
+}
+
+#cityButton[hidden], #regionFilters[hidden], #savedTitle[hidden],
+#listKicker[hidden], #savedSummary[hidden], #fitButton[hidden] {
+  display: none !important;
+}
+
+.saved-country {
+  padding: 4px 4px 12px;
+}
+
+.saved-country + .saved-country {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.saved-country > h3, .saved-city > h4 {
+  margin: 8px 10px 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.saved-city > h4 {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-unavailable #locateButton {
+  display: none;
+}
+
+@media (min-width: 850px) {
+  .bottom-nav {
+    display: flex;
+    left: 20px;
+    right: auto;
+    width: 400px;
+  }
+
+  .list-panel, body.list-view .list-panel, body.saved-view .list-panel {
+    top: var(--content-top);
+    left: 20px;
+    right: auto;
+    width: 400px;
+    bottom: calc(var(--nav-height) + var(--safe-bottom) + 20px);
+  }
+}

@@ -1,9 +1,10 @@
-const CACHE = 'coffee-map-v37-20260908-map-lifecycle';
+const CACHE_PREFIX = 'coffee-map-v';
+const CACHE = 'coffee-map-v41';
 const SHELL = [
   './', './index.html', './fonts.css?v=36', './styles.css?v=36', './admin.css?v=36',
-  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36',
-  './map-config.js?v=36', './multicity.js?v=36', './compact-search.js?v=36',
-  './app.js?v=37', './admin-core.js?v=36', './manifest.webmanifest',
+  './filter-scroll.css?v=36', './compact-nav.css?v=41', './city-list-fix.css?v=36', './dynamic-location.css?v=41',
+  './location-catalog.js?v=41', './map-config.js?v=41', './multicity.js?v=41', './compact-search.js?v=41',
+  './app.js?v=41', './admin-core.js?v=41', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
@@ -15,7 +16,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -33,21 +34,21 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE).then(cache => cache.put('./index.html', copy));
           return response;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => cacheMatch('./index.html'))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      const network = fetch(event.request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      });
-      return cached || network;
-    })
-  );
+  event.respondWith(cacheMatch(event.request).then(cached => cached || fetch(event.request).then(response => {
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    }
+    return response;
+  })));
 });
+
+async function cacheMatch(request) {
+  const cache = await caches.open(CACHE);
+  return cache.match(request);
+}
