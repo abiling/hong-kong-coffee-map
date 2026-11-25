@@ -43,13 +43,32 @@ Build a Cloudflare Pages Direct Upload ZIP with Python 3 from the current source
 ```sh
 python3 tools/build_staging.py \
   --api-url 'https://your-test-api.example/exec' \
-  --output /tmp/coffee-shops-v40-staging.zip
+  --output /tmp/coffee-shops-v41-staging.zip
 ```
 
 Use your staging Apps Script web app's HTTPS `/exec` URL. To build from a pinned
-v40 source revision, add `--commit <full-commit-sha>`. Use `--source-dir <path>` to read
+source revision, add `--commit <full-commit-sha>`. Use `--source-dir <path>` to read
 another source directory or Git checkout. Choose a fresh output path for each run.
 The ZIP has `index.html` at its root and includes only the static runtime assets.
 The page and PWA are labeled Staging, and storage and Service Worker caches are
 isolated by staging endpoint. Enter the staging admin key in the app on the
 test device. Keep the generated ZIP and credentials out of Git.
+
+For an existing Staging deployment, use the values from its deployed package
+to retain storage, cache ownership, and installed PWA identity on the same origin.
+The repository does not record the full v39/v40 deployment configuration.
+Pass the exact localStorage prefix (including its trailing separator), Service
+Worker `CACHE_PREFIX`, and manifest `id` as separate options.
+
+```sh
+python3 tools/build_staging.py \
+  --api-url "$STAGING_API_URL" \
+  --storage-prefix "$STAGING_STORAGE_PREFIX" \
+  --cache-prefix "$STAGING_CACHE_PREFIX" \
+  --manifest-id "$STAGING_MANIFEST_ID" \
+  --output /tmp/coffee-shops-v41-compat.zip
+```
+
+If the deployed manifest omits `id`, use its effective identity resolved from
+`start_url`. The builder appends the app version to the supplied cache prefix.
+Omitted options keep the endpoint-hash defaults.

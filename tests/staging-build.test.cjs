@@ -47,7 +47,7 @@ with zipfile.ZipFile(path) as bundle:
         'index.html': ('coffee-map-active-city-v1', 'coffee-map-active-country-v1', 'coffee-map-all-data-v4'),
         'location-catalog.js': ('coffee-map-all-data-v4',),
         'multicity.js': ('coffee-map-active-city-v1', 'coffee-map-active-country-v1', 'coffee-map-country-city-v1:'),
-        'sw.js': ('coffee-map-v', 'coffee-map-v40'),
+        'sw.js': ('coffee-map-v', 'coffee-map-v41'),
     }.items():
         for key in keys:
             assert "'" + prefix + key + "'" in read(name)
@@ -85,6 +85,45 @@ test('staging build rejects missing local runtime resources and stray API refere
     const stray = spawnSync('python3', args(output, ['--source-dir', source]), { encoding: 'utf8' });
     assert.equal(stray.status, 1);
     assert.match(stray.stderr, /compact-search.js: unexpected Apps Script reference/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('staging can retain an explicit storage namespace, worker prefix and manifest identity across API URLs', () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'coffee-staging-test-'));
+  try {
+    const first = join(scratch, 'original-api.zip');
+    const second = join(scratch, 'replacement-api.zip');
+    const compatibility = [
+      '--storage-prefix', 'existing-stage:',
+      '--cache-prefix', 'existing-pwa-cache-v',
+      '--manifest-id', '/?existing-staging'
+    ];
+    execFileSync('python3', args(first, compatibility));
+    execFileSync('python3', args(second, compatibility, 'https://other.test/exec'));
+    const inspect = `
+import json, sys, zipfile
+
+for path in sys.argv[1:]:
+    with zipfile.ZipFile(path) as bundle:
+        read = lambda name: bundle.read(name).decode('utf-8')
+        assert "'existing-stage:hk-coffee-admin-key-v2'" in read('app.js')
+        assert "'existing-stage:hk-coffee-admin-key-v2'" in read('admin-core.js')
+        assert "'existing-stage:coffee-map-country-city-v1:'" in read('multicity.js')
+        assert "'existing-stage:coffee-map-all-data-v4'" in read('index.html')
+        assert "'existing-stage:coffee-map-all-data-v4'" in read('location-catalog.js')
+        assert "const CACHE_PREFIX = 'existing-pwa-cache-v';" in read('sw.js')
+        assert "const CACHE = 'existing-pwa-cache-v41';" in read('sw.js')
+        assert json.loads(read('manifest.webmanifest'))['id'] == '/?existing-staging'
+`;
+    execFileSync('python3', ['-c', inspect, first, second]);
+    const overlap = spawnSync('python3', args(join(scratch, 'overlap.zip'), ['--cache-prefix', 'coffee-map-']), { encoding: 'utf8' });
+    assert.equal(overlap.status, 1);
+    assert.match(overlap.stderr, /overlaps the production Service Worker cache prefix/);
+    const crossOrigin = spawnSync('python3', args(join(scratch, 'cross-origin.zip'), ['--manifest-id', '//example.com/pwa']), { encoding: 'utf8' });
+    assert.equal(crossOrigin.status, 1);
+    assert.match(crossOrigin.stderr, /same-origin/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

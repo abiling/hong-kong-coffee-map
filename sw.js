@@ -1,10 +1,10 @@
 const CACHE_PREFIX = 'coffee-map-v';
-const CACHE = 'coffee-map-v40';
+const CACHE = 'coffee-map-v41';
 const SHELL = [
   './', './index.html', './fonts.css?v=36', './styles.css?v=36', './admin.css?v=36',
-  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36', './dynamic-location.css?v=40',
-  './location-catalog.js?v=40', './map-config.js?v=40', './multicity.js?v=40', './compact-search.js?v=40',
-  './app.js?v=40', './admin-core.js?v=40', './manifest.webmanifest',
+  './filter-scroll.css?v=36', './compact-nav.css?v=41', './city-list-fix.css?v=36', './dynamic-location.css?v=41',
+  './location-catalog.js?v=41', './map-config.js?v=41', './multicity.js?v=41', './compact-search.js?v=41',
+  './app.js?v=41', './admin-core.js?v=41', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];

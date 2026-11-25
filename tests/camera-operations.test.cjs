@@ -56,7 +56,7 @@ function startup(order, changedHeader = false, count = 2, changedViewport = fals
     window: { maplibregl: true }, maplibregl: {
       Map: MapStub, NavigationControl: class {}, AttributionControl: class {}, LngLatBounds: Bounds
     },
-    map: null, activeView: 'map', filtered: [], lastDataFitKey: '', DEFAULT_CENTER: [114.1588, 22.2857],
+    map: null, activeView: 'map', filtered: [], lastDataFitKey: '', searchCameraKey: '', DEFAULT_CENTER: [114.1588, 22.2857],
     els: { topbar: { getBoundingClientRect: () => ({ bottom }) } },
     installMapContextLayers() {}
   });
@@ -76,7 +76,7 @@ function startup(order, changedHeader = false, count = 2, changedViewport = fals
   return calls;
 }
 
-async function citySwitch(cacheKind) {
+async function citySwitch(cacheKind, fromSearch = false) {
   const calls = [];
   const validShop = { active: true, latitude: '35.66', longitude: '139.70' };
   const cached = cacheKind === 'valid' ? { shops: [validShop] }
@@ -87,6 +87,7 @@ async function citySwitch(cacheKind) {
       easeTo: () => calls.push('easeTo')
     },
     activeView: 'map', citySearch: 'query', activeRegion: 'x', activeDistrict: 'x', selectedId: 'x', shops: ['old'], filtered: ['old'],
+    Catalog: require('../location-catalog.js'), searchCameraKey: fromSearch ? 'JP::Tokyo' : '', searchSelection: 0,
     els: { search: { value: 'query' }, clearSearch: { classList: { remove() {} } }, detailSheet: {}, districtSheet: {} },
     window: { CoffeeMapLocationCatalog: require('../location-catalog.js'), CoffeeMapCities: {
       activeCity: 'Tokyo', activeCountryCode: 'JP',
@@ -95,10 +96,11 @@ async function citySwitch(cacheKind) {
     } },
     activeCityName: () => 'Tokyo', activeCountryCode: () => 'JP', closeSheet() {}, renderDistricts() {}, applyFilters() {},
     readCityCache: () => cached,
-    loadCloudShops: async ({ fit }) => {
+    loadCloudShops: async ({ fit, revalidate }) => {
       // Valid cached or newly fetched remote data causes applyFilters({fit:true})
       // to perform the final shop-bounds operation.
       if (fit && (cacheKind === 'valid' || cacheKind === 'none')) calls.push('fitBounds');
+      if (fromSearch) assert.equal(revalidate, false);
     }
   });
   vm.runInContext(extract('switchCityView'), context);
@@ -128,7 +130,8 @@ async function citySwitch(cacheKind) {
     citySwitch: {
       cachedValidShops: await citySwitch('valid'),
       noCacheThenRemote: await citySwitch('none'),
-      cachedEmptyCity: await citySwitch('empty')
+      cachedEmptyCity: await citySwitch('empty'),
+      ...(!process.argv[2] ? { searchTarget: await citySwitch('valid', true) } : {})
     }
   };
   if (!process.argv[2]) {
@@ -142,6 +145,7 @@ async function citySwitch(cacheKind) {
     assert.deepEqual(result.citySwitch.cachedValidShops, ['stop', 'fitBounds']);
     assert.deepEqual(result.citySwitch.noCacheThenRemote, ['stop', 'easeTo', 'fitBounds']);
     assert.deepEqual(result.citySwitch.cachedEmptyCity, ['stop', 'easeTo']);
+    assert.deepEqual(result.citySwitch.searchTarget, ['stop']);
     assert.equal(JSON.stringify(stable[0].options.padding), JSON.stringify({ top: 190, bottom: 120, left: 35, right: 35 }));
     assert.equal(stable[0].options.maxZoom, 14);
     assert.equal(stable[0].options.duration, 700);

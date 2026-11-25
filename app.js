@@ -11,7 +11,8 @@
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
   let map = null, toastTimer = null, userLocationMarker = null, lastDataFitKey = '';
-  let citySearch = '', savedSearch = '', listResults = [], cloudStatus = 'syncing';
+  let globalSearch = '', savedSearch = '', listResults = [], cloudStatus = 'syncing';
+  let cityReady = Promise.resolve(), cityRevision = 0, searchSelection = 0, searchCameraKey = '';
   const markers = new Map();
   const favoriteWrites = new Map();
   const $ = s => document.querySelector(s);
@@ -34,7 +35,8 @@
     remove: removeCachedShop,
     invalidate: invalidateCityCache,
     getShop: findCachedShop,
-    getResults: () => listResults,
+    searchShops,
+    selectSearchShop,
     selectShop: id => selectShop(String(id), activeView !== 'saved')
   });
 
@@ -129,7 +131,7 @@
         // before style load. Rebuilding them here only discards identical nodes.
         // Keep the load-time correction only when bounds or header padding changed.
         // Otherwise an earlier cached-data fit is already the final viewport.
-        if (activeView !== 'saved' && filtered.length) fitTo(filtered, false, { skipIfSame: true });
+        if (activeView !== 'saved' && filtered.length && !searchCameraKey) fitTo(filtered, false, { skipIfSame: true });
       });
     } catch (error) {
       console.warn('Map initialization failed:', error);
@@ -314,27 +316,32 @@
     setCloudState('online', '云端已同步', meta);
     window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
     renderDistricts();
-    applyFilters({ fit });
+    applyFilters({ fit: fit && !searchCameraKey });
     refreshFavoriteUI({ renderSaved: false });
   }
 
   function refreshAllInBackground(city, countryCode) {
+    const revision = cityRevision;
     fetchAllCloudPayload().then(payload => {
-      if (activeCityName() !== city || activeCountryCode() !== countryCode) return;
+      if (revision !== cityRevision || activeCityName() !== city || activeCountryCode() !== countryCode) return;
       const cityPayload = cityPayloadFromAll(payload, city, countryCode);
       if (cityPayload) applyCloudPayload(cityPayload);
     }).catch(error => {
       console.warn('Background cloud refresh failed:', error);
-      if (activeCityName() === city && activeCountryCode() === countryCode) setCloudState('online', '使用本地缓存', `${shops.length} 家 · 云端更新稍后重试`);
+      if (revision === cityRevision && activeCityName() === city && activeCountryCode() === countryCode) {
+        setCloudState('online', '使用本地缓存', `${shops.length} 家 · 云端更新稍后重试`);
+      }
     });
   }
 
-  async function loadCloudShops({ fit = false, quiet = false, force = false, city = activeCityName(), countryCode = countryCodeForCity(city) } = {}) {
+  async function loadCloudShops({ fit = false, quiet = false, force = false, revalidate = true, city = activeCityName(), countryCode = countryCodeForCity(city) } = {}) {
+    const revision = cityRevision;
     const allCache = !force ? readAllDataCache() : null;
     const cachedCity = allCache ? cityPayloadFromAll(allCache, city, countryCode) : null;
     if (cachedCity) {
       if (activeCityName() === city && activeCountryCode() === countryCode) applyCloudPayload(cachedCity, { fit });
-      if (isCacheStale(allCache)) refreshAllInBackground(city, countryCode);
+      // Search can reuse an in-flight refresh without starting a new request.
+      if (revalidate ? isCacheStale(allCache) : cloudLoad) refreshAllInBackground(city, countryCode);
       return cachedCity;
     }
 
@@ -342,11 +349,11 @@
     if (!quiet && !allDataCache) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
     try {
       const payload = await getCloudPayload({ force: true, city, countryCode });
-      if (activeCityName() !== city || activeCountryCode() !== countryCode) return payload;
+      if (revision !== cityRevision || activeCityName() !== city || activeCountryCode() !== countryCode) return payload;
       applyCloudPayload(payload, { fit });
       return payload;
     } catch (error) {
-      if (activeCityName() !== city || activeCountryCode() !== countryCode) return null;
+      if (revision !== cityRevision || activeCityName() !== city || activeCountryCode() !== countryCode) return null;
       console.error(error);
       setCloudState('error', '云端连接失败', '请检查网络后重试');
       if (!readAllDataCache()) {
@@ -424,10 +431,9 @@
   function renderList() {
     els.allCount.textContent = shops.length;
     const saved = activeView === 'saved';
-    const favorites = saved ? (readAllDataCache()?.shops || []).filter(favoriteFor)
-      .map(normalizeShop).filter(isValidShop) : [];
+    const favorites = saved ? searchableShops(true) : [];
     const query = normalize(savedSearch);
-    listResults = saved ? favorites.filter(shop => matchesSearch(shop, query, true)) : filtered;
+    listResults = saved ? favorites.filter(shop => matchesSearch(shop, query)) : filtered;
     els.resultCount.textContent = listResults.length;
     $('#savedCount').textContent = favorites.length;
 
@@ -464,25 +470,66 @@
     }).join('');
   }
 
-  function matchesSearch(shop, query, global = false) {
+  function searchableShops(saved) {
+    const records = readAllDataCache()?.shops || [];
+    return (saved ? records.filter(favoriteFor) : records).map(normalizeShop).filter(isValidShop);
+  }
+
+  function searchShops(value, { currentCity = false } = {}) {
+    const query = normalize(value);
+    if (!query) return [];
+    const locationKey = window.CoffeeMapCities.activeLocationKey;
+    const saved = activeView === 'saved';
+    return searchableShops(saved).filter(shop =>
+      (!currentCity || saved || Catalog.locationKey(shop.country_code, shop.city) === locationKey)
+      && matchesSearch(shop, query));
+  }
+
+  function matchesSearch(shop, query) {
     if (!query) return true;
-    const fields = [shop.name, shop.address, shop.region, shop.district, shop.category, shop.notes];
-    if (global) {
-      const cities = window.CoffeeMapCities;
-      const country = cities.countries[shop.country_code];
-      const city = cities.getCity(shop.city, shop.country_code);
-      fields.push(shop.city, shop.country, shop.country_code, city?.localLabel, country?.localLabel, country?.label);
-    }
+    const cities = window.CoffeeMapCities;
+    const country = cities.countries[shop.country_code];
+    const city = cities.getCity(shop.city, shop.country_code);
+    const fields = [shop.name, shop.address, shop.region, shop.district, shop.category, shop.notes,
+      shop.city, shop.country, shop.country_code, city?.label, city?.localLabel, country?.label, country?.localLabel];
     return fields.some(value => normalize(value).includes(query));
   }
 
   function applyFilters({ fit = false } = {}) {
-    const query = normalize(citySearch);
     filtered = shops.filter(shop => (activeRegion === '全部' || shop.region === activeRegion)
-      && (activeDistrict === '全部' || shop.district === activeDistrict) && matchesSearch(shop, query));
+      && (activeDistrict === '全部' || shop.district === activeDistrict));
     renderList();
     renderMarkers();
     if (fit) fitTo(filtered, true);
+  }
+
+  async function selectSearchShop(id) {
+    const cities = window.CoffeeMapCities;
+    const raw = findCachedShop(id);
+    if (!raw) return;
+    const shop = normalizeShop(raw);
+    if (!isValidShop(shop)) return;
+    if (activeView === 'saved') {
+      if (favoriteFor(raw)) selectShop(id, false);
+      return;
+    }
+
+    if (map && activeView === 'list') $('.nav-item[data-view="map"]').click();
+    const selection = ++searchSelection;
+    const key = Catalog.locationKey(shop.country_code, shop.city);
+    // Claim the camera before the city-change event or late map-load fit runs.
+    searchCameraKey = key;
+    if (key !== cities.activeLocationKey && !cities.setActiveLocation(key)) {
+      searchCameraKey = '';
+      return;
+    }
+
+    await cityReady;
+    if (selection !== searchSelection || key !== cities.activeLocationKey) return;
+    const current = findCachedShop(id);
+    if (!current) return;
+    const location = Catalog.canonicalLocation(current);
+    if (Catalog.locationKey(location.country_code, location.city) === key) selectShop(id, true);
   }
 
   function fitTo(items, animate = true, { skipIfSame = false } = {}) {
@@ -605,7 +652,10 @@
       window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       applyFilters({ fit: true });
     });
-    window.addEventListener('coffee-map:city-change', switchCityView);
+    window.addEventListener('coffee-map:city-change', event => {
+      cityRevision += 1;
+      cityReady = switchCityView(event);
+    });
     window.addEventListener('online', () => {
       for (const [id, write] of favoriteWrites) {
         if (write.awaitingRead) verifyFavorite(id, write);
@@ -623,18 +673,17 @@
         savedSearch = els.search.value;
         renderList();
       } else {
-        citySearch = els.search.value;
-        applyFilters();
+        globalSearch = els.search.value;
       }
     });
     els.clearSearch.addEventListener('click', () => {
       els.search.value = '';
       els.search.dispatchEvent(new Event('input'));
-      if (activeView !== 'saved') fitTo(filtered, true);
     });
     $('#fitButton').addEventListener('click', () => fitTo(filtered, true));
     $$('.nav-item').forEach(button => button.addEventListener('click', () => {
       if (activeView === button.dataset.view) return;
+      searchSelection += 1;
       activeView = button.dataset.view;
       const saved = activeView === 'saved';
       $$('.nav-item').forEach(item => item.classList.toggle('active', item === button));
@@ -646,7 +695,7 @@
       $('#fitButton').hidden = saved;
       $('#savedSummary').hidden = !saved;
       $('#listKicker').hidden = saved;
-      els.search.value = saved ? savedSearch : citySearch;
+      els.search.value = saved ? savedSearch : globalSearch;
       els.search.placeholder = saved ? '搜索全部收藏' : '搜索店名、地址或地区';
       els.clearSearch.classList.toggle('visible', Boolean(els.search.value));
       closeSheet(els.detailSheet);
@@ -684,16 +733,16 @@
     activeDistrict = '全部';
     selectedId = null;
     lastDataFitKey = '';
-    citySearch = '';
-    if (activeView !== 'saved') {
-      els.search.value = '';
-      els.clearSearch.classList.remove('visible');
+    const fromSearch = searchCameraKey === Catalog.locationKey(countryCode, city);
+    if (!fromSearch) {
+      searchCameraKey = '';
+      searchSelection += 1;
     }
     closeSheet(els.detailSheet);
     closeSheet(els.districtSheet);
 
     if (map) map.stop();
-    if (map && config?.camera && !hasCachedShops) {
+    if (map && !fromSearch && config?.camera && !hasCachedShops) {
       map.easeTo({ center: config.camera.center, zoom: config.camera.zoom, duration: 420, essential: true });
     }
 
@@ -704,7 +753,7 @@
       renderDistricts();
       applyFilters();
     }
-    await loadCloudShops({ fit: true, city, countryCode });
+    await loadCloudShops({ fit: !fromSearch, revalidate: !fromSearch, city, countryCode });
   }
 
   function applyShopUpdate(rawShop, previousCity, previousCountryCode) {
@@ -998,5 +1047,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=40').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=41').catch(() => {});
 })();

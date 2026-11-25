@@ -38,15 +38,20 @@ function installMock({ scenario, cacheKey }) {
     ...cities,
     ...[null, '', ' ', 'garbage', 91].map((latitude, i) => ({ ...cities[1], id: 'invalid-' + i, latitude }))
   ];
-  const v40 = ['navigation-v40', 'favorites-v40', 'sync-v40', 'webgl-v40'].includes(scenario);
+  const v40 = /-v4[01]$/.test(scenario);
   const camera = [];
+  let deferredMapLoad;
   if (v40) {
     class MapStub {
       constructor() {
         if (scenario === 'webgl-v40') throw new Error('WebGL initialization failed');
       }
       addControl() {}
-      on(type, fn) { if (type === 'load') requestAnimationFrame(fn); }
+      on(type, fn) {
+        if (type !== 'load') return;
+        if (scenario === 'search-v41') deferredMapLoad = fn;
+        else requestAnimationFrame(fn);
+      }
       getLayer() { return true; }
       getContainer() { return { clientWidth: 390, clientHeight: 844 }; }
       isMoving() { return false; }
@@ -72,10 +77,13 @@ function installMock({ scenario, cacheKey }) {
     // Give cross-city shops identical names and addresses to expose text-based selection.
     records = [
       ...cities.map(shop => ({ ...shop, favorite: shop.id !== 'bj', name: 'Shared Coffee', address: 'Same address' })),
-      { ...cities[0], id: 'hk-other', name: 'Other Coffee', region: '九龙', favorite: false },
+      { ...cities[0], id: 'hk-other', name: 'Other Coffee', region: '九龙', district: '九龙 district', favorite: false },
       { ...cities[1], id: 'inactive', active: false, favorite: true },
       { ...cities[1], id: 'invalid', latitude: null, favorite: true }
     ];
+  }
+  if (scenario === 'search-v41') {
+    records.push({ ...records[1], id: 'jp-bj', city: 'Beijing', category: 'Roastery', notes: 'Single origin' });
   }
   const requests = [];
   const pendingLists = [];
@@ -146,6 +154,7 @@ function installMock({ scenario, cacheKey }) {
   };
   window.phase1 = {
     cacheKey, cities, google, paris, shanghai, requests, pendingLists, pendingFavorites, camera,
+    finishMapLoad() { deferredMapLoad(); },
     addRecord(shop) { records.push(shop); },
     completeList(ok = true) {
       const { resolve, reject, snapshot } = pendingLists.shift();
@@ -335,10 +344,129 @@ async function exerciseV40(scenario) {
     input.value = text;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
+  const openSearch = () => click('.compact-search-button');
+  const search = query => type($('.search-mode-input'), query);
+  const searchIds = () => [...document.querySelectorAll('[data-search-shop-id]')].map(button => button.dataset.searchShopId);
+  const choose = id => click(`[data-search-shop-id="${id}"]`);
   await until(() => pendingLists.length === 1, 'Initial list request missing');
   completeList();
   await until(() => card('hk') && $('.compact-search-button'), 'City list or search did not initialize');
   await new Promise(requestAnimationFrame);
+
+  if (scenario === 'search-v41') {
+    click('#districtButton');
+    click('[data-district="港岛 district"]');
+    const before = JSON.stringify(camera);
+    openSearch();
+    const expectResults = (...ids) => {
+      check(JSON.stringify(searchIds()) === JSON.stringify(ids), 'Unexpected IDs: ' + searchIds());
+      if (ids.length) {
+        check($('.search-mode-status').textContent === `${ids.length} 个匹配结果`, 'Count differs from displayed records');
+      }
+    };
+    check($('[data-search-scope="all"]').getAttribute('aria-pressed') === 'true', 'Default scope is not global');
+    expectResults();
+    search('  SHARED  ');
+    expectResults('hk', 'jp', 'bj', 'xa', 'jp-bj');
+    check($('[data-search-shop-id="jp"]').textContent.includes('Japan · Tokyo'), 'Search result has no location');
+    click('[data-search-scope="city"]');
+    expectResults('hk');
+    search('other');
+    expectResults('hk-other');
+    click('[data-search-scope="all"]');
+    for (const [query, ids] of [
+      ['东京', ['jp']], ['Tokyo', ['jp']], ['中国', ['bj', 'xa']], ['西安', ['xa']],
+      ['  cn ', ['bj', 'xa']], ['Japan', ['jp', 'jp-bj']], ['日本', ['jp', 'jp-bj']],
+      ['北京', ['bj']], ['Beijing', ['bj', 'jp-bj']], ['Shibuya district', ['jp', 'jp-bj']],
+      ['碑林区', ['xa']], ['same address', ['hk', 'jp', 'bj', 'xa', 'jp-bj']],
+      ['roastery', ['jp-bj']], ['single origin', ['jp-bj']]
+    ]) {
+      search(query);
+      expectResults(...ids);
+    }
+    click('.search-mode-cancel');
+    check(catalog.activeLocationKey === 'HK::Hong Kong' && card('hk') && !card('hk-other')
+      && JSON.stringify(camera) === before && pendingLists.length === 0, 'Typing or canceling affected the map, filter or API');
+
+    click('[data-view="list"]');
+    openSearch();
+    search('shared');
+    const now = Date.now.bind(Date);
+    Date.now = () => now() + 16 * 60 * 1000;
+    choose('bj');
+    // Open another result in the same turn, before the first city's continuation.
+    openSearch();
+    choose('xa');
+    await until(() => selected() === 'xa', 'Rapid cross-city choices opened the wrong shop');
+    check(catalog.activeLocationKey === "CN::Xi'an" && $('[data-view="map"]').classList.contains('active'),
+      'Selection did not prepare the target map view');
+    check(!$('#appleMapsButton').hidden && $('#googleMapsButton').hidden, 'Shop country did not determine map provider');
+    check(JSON.stringify(camera.slice(JSON.parse(before).length).filter(([type]) => type !== 'stop'))
+      === JSON.stringify([['fly', { center: [108.94, 34.25], zoom: 15.6, offset: [0, -90], essential: true }]]),
+      'An obsolete city fit or shop focus moved the camera');
+    window.phase1.finishMapLoad();
+    check(camera.at(-1)[1].zoom === 15.6 && pendingLists.length === 0, 'Map load overrode focus or search fetched data');
+    Date.now = now;
+
+    openSearch();
+    click('[data-search-scope="city"]');
+    expectResults('xa');
+    click('[data-search-scope="all"]');
+    choose('bj');
+    await until(() => selected() === 'bj', 'Beijing detail by ID did not open');
+    openSearch();
+    click('[data-search-scope="city"]');
+    expectResults('bj');
+    choose('bj');
+    await until(() => selected() === 'bj' && camera.at(-1)[1].zoom === 15.6, 'Current-city result did not focus');
+
+    // Edit and favorite a shop while an older list response is still pending.
+    click('#refreshButton');
+    click('#editSelectedButton');
+    const form = $('#editPlaceForm');
+    check(form.dataset.shopId === 'bj', 'Editor selected the wrong ID');
+    form.elements.name.value = 'Renamed coffee';
+    form.requestSubmit();
+    await until(() => !$('#editPlaceDialog').open && cached('bj').name === 'Renamed coffee', 'Edit did not update cache');
+    openSearch();
+    search('renamed');
+    expectResults('bj');
+    click('#favoriteButton');
+    completeFavorite();
+    await until(() => cached('bj').favorite, 'Favorite did not update cache');
+    const lastFocus = JSON.stringify(camera);
+    const lateRead = nextData();
+    completeList();
+    await lateRead;
+    expectResults('bj');
+    check(JSON.stringify(camera) === lastFocus && cached('bj').favorite, 'Late response overrode focus or updated records');
+    click('.search-mode-cancel');
+    click('[data-view="saved"]');
+    openSearch();
+    check($('.search-mode-scopes').hidden && $('.search-mode-input').value === '', 'Ordinary search leaked into Favorites');
+    search('renamed');
+    expectResults('bj');
+    choose('bj');
+    click('#favoriteButton');
+    openSearch();
+    expectResults();
+    completeFavorite();
+    await until(() => !cached('bj').favorite, 'Unfavorite did not persist');
+    click('.search-mode-cancel');
+    click('[data-view="map"]');
+    openSearch();
+    check($('.search-mode-input').value === 'renamed' && !$('.search-mode-scopes').hidden, 'Favorites changed ordinary search');
+    expectResults('bj');
+    choose('bj');
+    await until(() => selected() === 'bj', 'Renamed shop was not selectable');
+    window.confirm = () => true;
+    click('#deleteSelectedButton');
+    await until(() => !cached('bj'), 'Archive did not update cache');
+    openSearch();
+    expectResults();
+    check(requests.at(-1).data.id === 'bj' && cached('jp-bj'), 'Archive targeted a different shop');
+    return;
+  }
 
   if (scenario === 'navigation-v40') {
     let changes = 0;
@@ -360,7 +488,29 @@ async function exerciseV40(scenario) {
     check(!countryOpen() && catalog.activeCity === "Xi'an" && card('xa'), 'City row did not switch');
     openCountry();
     check(country('CN').getAttribute('aria-expanded') === 'true', 'Active multi-city country did not reopen');
-    check($(`[data-location-key="CN::Xi'an"] use`).getAttribute('href') === '#ms-check', 'Selected city checkmark missing');
+    const selectedCity = $(`[data-location-key="CN::Xi'an"]`);
+    const cityLabels = selectedCity.firstElementChild;
+    const cityName = cityLabels.querySelector('strong');
+    const localName = cityLabels.querySelector('small');
+    const rect = node => node.getBoundingClientRect();
+    const style = node => getComputedStyle(node);
+    check(selectedCity.querySelector('use').getAttribute('href') === '#ms-check', 'Selected city checkmark missing');
+    check(rect(cityName).left === rect(country('CN').querySelector('strong')).left
+      && rect(selectedCity.querySelector('b')).right === rect(country('CN').querySelector('b')).right,
+      'City text or indicator did not align with country row');
+    check(style($('#country-cities-CN')).borderLeftWidth === '0px'
+      && style($('#country-cities-CN')).marginLeft === '0px' && style(selectedCity).borderBottomWidth === '0px'
+      && style(country('CN').parentElement).borderTopWidth === '1px', 'City or country divider behavior changed');
+    check(rect(selectedCity).height >= 44 && style(selectedCity).minHeight === '44px'
+      && style(cityName).fontSize === '16px' && style(cityName).fontWeight === '500'
+      && style(localName).fontSize === '14px' && style(localName).fontWeight === '400'
+      && rect(localName).left - rect(cityName).right === 8 && Math.abs(rect(localName).top - rect(cityName).top) < 5,
+      'City names are not compact, bilingual and inline');
+    cityName.textContent = 'LongEnglishCityName'.repeat(8);
+    localName.textContent = '很长的本地化城市名称'.repeat(9);
+    check(rect(selectedCity).height > 44 && cityLabels.scrollWidth <= cityLabels.clientWidth
+      && rect(cityLabels).right <= rect(selectedCity.querySelector('b')).left,
+      'Long city labels did not wrap clear of the indicator');
     click('[data-close-country]');
     click('#districtButton');
     click('[data-location-city="Beijing"]');
@@ -378,6 +528,7 @@ async function exerciseV40(scenario) {
     country('JP').click();
     check(countryOpen() && catalog.activeCity === 'Beijing' && $('#country-cities-JP button').dataset.locationKey,
       'New multi-city country switched without a city choice');
+    check(!$('[data-location-key="JP::Osaka"] small'), 'City without a local label rendered a placeholder');
     click('[data-location-key="JP::Osaka"]');
     check(!countryOpen() && catalog.activeCity === 'Osaka' && card('osaka'), 'New city selection did not switch');
     return;
@@ -386,8 +537,13 @@ async function exerciseV40(scenario) {
   if (scenario === 'webgl-v40') {
     check($('#map .map-error')?.textContent.includes('地图暂不可用') && $('#locateButton').disabled, 'WebGL error state missing');
     click('[data-view="list"]');
-    type($('#searchInput'), 'other');
-    check(count() === 1 && card('hk-other'), 'List search stopped after WebGL failure');
+    openSearch();
+    search('other');
+    check(searchIds().join() === 'hk-other', 'List search stopped after WebGL failure');
+    search('东京');
+    choose('jp');
+    await until(() => selected() === 'jp', 'Cross-city search detail stopped after WebGL failure');
+    check(catalog.activeCity === 'Tokyo' && card('jp') && $('[data-view="list"]').classList.contains('active'), 'The Tokyo list did not load');
     click('[data-view="saved"]');
     check(count() === 3 && card('jp') && card('xa'), 'Global favorites stopped after WebGL failure');
     card('xa').click();
@@ -522,7 +678,8 @@ for (const [scenario, title] of Object.entries({
   'navigation-v40': 'single-city navigation, accordion, dynamic city addition, and quick switch',
   'favorites-v40': 'global grouping/search, cross-city identity and provider, edit/archive, and map return',
   'sync-v40': 'optimistic feedback, serial writes, late reads, explicit failure, unknown results and timeout',
-  'webgl-v40': 'list, search, details and favorites survive a throwing WebGL constructor'
+  'webgl-v40': 'list, cross-city search, details and favorites survive a throwing WebGL constructor',
+  'search-v41': 'global search scope, location labels, rapid choices, late fit and cache mutations'
 })) {
   test('API v7 mock contract in Chromium: ' + title, {
     skip: !browserAvailable && 'Playwright and Chromium required (set CHROMIUM_BIN if needed)'
@@ -543,7 +700,16 @@ for (const [scenario, title] of Object.entries({
         return route.fulfill({ path: join(root, name) });
       });
       await page.goto('http://coffee-map.test/', { timeout: 10_000 });
-      await page.evaluate(scenario.endsWith('-v40') ? exerciseV40 : exercise, scenario);
+      await page.evaluate(/-v4[01]$/.test(scenario) ? exerciseV40 : exercise, scenario);
+      if (scenario === 'search-v41') {
+        await page.setViewportSize({ width: 1080, height: 844 });
+        await page.locator('.search-mode-cancel').click();
+        await page.locator('#searchInput').click();
+        await page.locator('[data-search-scope="all"]').click();
+        await page.locator('.search-mode-input').fill('东京');
+        assert.equal(await page.locator('.search-mode-status').textContent(), '1 个匹配结果');
+        assert.equal(await page.locator('[data-search-shop-id="jp"]').isVisible(), true);
+      }
       if (scenario === 'navigation-v40') {
         await page.reload();
         assert.equal(await page.evaluate(() => window.CoffeeMapCities.activeCity), 'Osaka');
@@ -569,11 +735,11 @@ test('PWA shell versions match the page and cache bootstrap', () => {
   const html = source('index.html');
   const worker = source('sw.js');
   assert.ok(html.includes(ALL_DATA_CACHE_KEY));
-  assert.match(worker, /coffee-map-v40/);
-  assert.match(source('app.js'), /register\('\.\/sw\.js\?v=40'\)/);
-  for (const asset of ['location-catalog.js', 'map-config.js', 'multicity.js', 'app.js', 'admin-core.js']) {
-    const path = './' + asset + '?v=40';
+  assert.match(worker, /coffee-map-v41/);
+  assert.match(source('app.js'), /register\('\.\/sw\.js\?v=41'\)/);
+  for (const asset of ['location-catalog.js', 'map-config.js', 'multicity.js', 'compact-search.js', 'app.js', 'admin-core.js', 'compact-nav.css', 'dynamic-location.css']) {
+    const path = './' + asset + '?v=41';
     assert.ok(worker.includes(path));
-    assert.ok((asset === 'multicity.js' ? source('map-config.js') : html).includes(path));
+    assert.ok((html + source('map-config.js')).includes(path));
   }
 });

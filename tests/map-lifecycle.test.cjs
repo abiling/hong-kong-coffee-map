@@ -72,7 +72,7 @@ function markers(dataFirst, count) {
         remove() { removed++; }
       }
     },
-    map: null, activeView: 'map', markers: markerSet, filtered: [], selectedId: 'fixture-0',
+    map: null, activeView: 'map', markers: markerSet, filtered: [], selectedId: 'fixture-0', searchCameraKey: '',
     DEFAULT_CENTER: [114.1588, 22.2857],
     document: { createElement: () => ({ addEventListener() {} }) },
     installMapContextLayers() {}, fitTo() { fitCalls++; }, selectShop() {}
@@ -87,7 +87,7 @@ function markers(dataFirst, count) {
   assert.equal(markerSet.size, count);
   assert.ok(markerSet.get('fixture-0').node.innerHTML.includes(' selected'));
   const atLoad = { created, removed, fitCalls, sameNodes: initialNodes.every((m, i) => m === [...markerSet.values()][i]) };
-  // Existing search/city updates must still remove stale markers and render the
+  // City and location filter updates must still remove stale markers and render the
   // new result. The performance patch must not disable normal marker updates.
   context.filtered = [shops[0]];
   vm.runInContext('renderMarkers();', context);
