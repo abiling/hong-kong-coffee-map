@@ -72,7 +72,7 @@ function markers(dataFirst, count) {
         remove() { removed++; }
       }
     },
-    map: null, markers: markerSet, filtered: [], selectedId: 'fixture-0',
+    map: null, activeView: 'map', markers: markerSet, filtered: [], selectedId: 'fixture-0',
     DEFAULT_CENTER: [114.1588, 22.2857],
     document: { createElement: () => ({ addEventListener() {} }) },
     installMapContextLayers() {}, fitTo() { fitCalls++; }, selectShop() {}

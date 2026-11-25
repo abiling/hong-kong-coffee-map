@@ -1,9 +1,10 @@
-const CACHE = 'coffee-map-v39-20261124-phase-1';
+const CACHE_PREFIX = 'coffee-map-v';
+const CACHE = 'coffee-map-v40';
 const SHELL = [
   './', './index.html', './fonts.css?v=36', './styles.css?v=36', './admin.css?v=36',
-  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36', './dynamic-location.css?v=38',
-  './location-catalog.js?v=39', './map-config.js?v=39', './multicity.js?v=39', './compact-search.js?v=36',
-  './app.js?v=39', './admin-core.js?v=39', './manifest.webmanifest',
+  './filter-scroll.css?v=36', './compact-nav.css?v=36', './city-list-fix.css?v=36', './dynamic-location.css?v=40',
+  './location-catalog.js?v=40', './map-config.js?v=40', './multicity.js?v=40', './compact-search.js?v=40',
+  './app.js?v=40', './admin-core.js?v=40', './manifest.webmanifest',
   './icons/mark-cafe-shops.svg',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
@@ -15,7 +16,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -33,21 +34,21 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE).then(cache => cache.put('./index.html', copy));
           return response;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => cacheMatch('./index.html'))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      const network = fetch(event.request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      });
-      return cached || network;
-    })
-  );
+  event.respondWith(cacheMatch(event.request).then(cached => cached || fetch(event.request).then(response => {
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    }
+    return response;
+  })));
 });
+
+async function cacheMatch(request) {
+  const cache = await caches.open(CACHE);
+  return cache.match(request);
+}

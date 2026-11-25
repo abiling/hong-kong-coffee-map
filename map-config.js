@@ -5,7 +5,7 @@
     './filter-scroll.css?v=36',
     './compact-nav.css?v=36',
     './city-list-fix.css?v=36',
-    './dynamic-location.css?v=38'
+    './dynamic-location.css?v=40'
   ].forEach(href => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -24,7 +24,7 @@
   }
 
   if (!document.querySelector('script[data-multicity]')) {
-    const openTag = '<scr' + 'ipt src="./multicity.js?v=39" data-multicity="true">';
+    const openTag = '<scr' + 'ipt src="./multicity.js?v=40" data-multicity="true">';
     const closeTag = '</scr' + 'ipt>';
     document.write(openTag + closeTag);
   }
@@ -32,7 +32,7 @@
   window.addEventListener('load', () => {
     if (document.querySelector('script[data-compact-search]')) return;
     const script = document.createElement('script');
-    script.src = './compact-search.js?v=36';
+    script.src = './compact-search.js?v=40';
     script.dataset.compactSearch = 'true';
     document.body.appendChild(script);
   }, { once: true });

@@ -1,13 +1,11 @@
 (() => {
   'use strict';
 
-  const API_URL = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const $ = selector => document.querySelector(selector);
   const hiddenInput = $('#searchInput');
   const nav = $('.bottom-nav');
   if (!hiddenInput || !nav) return;
 
-  let shops = [];
   let renderToken = 0;
 
   const searchButton = document.createElement('button');
@@ -44,51 +42,24 @@
   const results = overlay.querySelector('.search-mode-results');
   const status = overlay.querySelector('.search-mode-status');
 
-  loadShops();
   bindEvents();
   updateBadge();
 
-  async function loadShops() {
-    try {
-      let payload;
-      if (window.CoffeeMapData?.load) {
-        payload = await window.CoffeeMapData.load();
-      } else {
-        const response = await fetch(`${API_URL}?action=list&_=${Date.now()}`, { cache: 'no-store' });
-        payload = await response.json();
-      }
-      if (!payload.ok || !Array.isArray(payload.shops)) return;
-      shops = payload.shops.filter(shop => shop.active !== false).map(shop => ({
-        id: String(shop.id || ''),
-        name: String(shop.name || ''),
-        district: String(shop.district || ''),
-        region: String(shop.region || ''),
-        address: String(shop.address || ''),
-        category: String(shop.category || ''),
-        notes: String(shop.notes || '')
-      }));
-      if (overlay.classList.contains('open') && overlayInput.value.trim()) renderResults();
-    } catch (error) {
-      console.warn('Search index could not be loaded:', error);
-    }
-  }
-
   function bindEvents() {
-    window.addEventListener('coffee-map:city-change', loadShops);
-    window.addEventListener('coffee-map:data-updated', loadShops);
+    window.addEventListener('coffee-map:results-updated', () => {
+      if (overlay.classList.contains('open')) renderResults();
+      updateBadge();
+    });
     searchButton.addEventListener('click', openSearch);
     cancelButton.addEventListener('click', closeSearch);
     overlay.querySelector('.search-mode-backdrop').addEventListener('click', closeSearch);
     clearButton.addEventListener('click', () => {
       overlayInput.value = '';
       syncCoreSearch('');
-      renderResults();
       overlayInput.focus();
     });
     overlayInput.addEventListener('input', () => {
       syncCoreSearch(overlayInput.value);
-      renderResults();
-      updateBadge();
     });
     overlayInput.addEventListener('keydown', event => {
       if (event.key === 'Escape') closeSearch();
@@ -108,6 +79,10 @@
 
   function openSearch() {
     overlayInput.value = hiddenInput.value;
+    overlayInput.placeholder = hiddenInput.placeholder;
+    overlayInput.setAttribute('aria-label', hiddenInput.placeholder);
+    overlay.querySelector('.search-mode-scope').textContent = document.body.classList.contains('saved-view')
+      ? '全部收藏' : '店名 · 地区 · 地址';
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
     document.body.classList.add('search-mode-open');
@@ -144,8 +119,8 @@
 
     requestAnimationFrame(() => {
       if (token !== renderToken) return;
-      const visibleIds = new Set([...document.querySelectorAll('#shopList [data-shop-id]')].map(card => String(card.dataset.shopId)));
-      const matched = shops.filter(shop => visibleIds.has(shop.id));
+      const matched = window.CoffeeMapData.getResults();
+      const global = document.body.classList.contains('saved-view');
       status.textContent = matched.length ? `${matched.length} 个匹配结果` : '没有匹配结果';
 
       if (!matched.length) {
@@ -157,7 +132,7 @@
       results.innerHTML = matched.map(shop => `
         <button class="search-result" type="button" role="option" data-search-shop-id="${escapeHtml(shop.id)}">
           <span class="search-result-name">${highlight(shop.name, query)}</span>
-          <span class="search-result-meta"><span class="search-result-district">${highlight(shop.district || shop.region, query)}</span>${highlight(shop.address, query)}</span>
+          <span class="search-result-meta"><span class="search-result-district">${highlight(global ? `${shop.country} · ${shop.city}` : shop.district || shop.region, query)}</span>${highlight(shop.address, query)}</span>
         </button>`).join('');
       results.querySelectorAll('[data-search-shop-id]').forEach(button => {
         button.addEventListener('click', () => chooseShop(button.dataset.searchShopId));
@@ -167,35 +142,29 @@
   }
 
   function chooseShop(id) {
-    const mapTab = document.querySelector('.nav-item[data-view="map"]');
-    if (mapTab && !mapTab.classList.contains('active')) mapTab.click();
     closeSearch();
-    setTimeout(() => {
-      const card = document.querySelector(`#shopList [data-shop-id="${cssEscape(id)}"]`);
-      if (card) card.click();
-    }, 90);
+    if (!document.body.classList.contains('saved-view') && !document.body.classList.contains('map-unavailable')) {
+      document.querySelector('.nav-item[data-view="map"]:not(.active)')?.click();
+    }
+    window.CoffeeMapData.selectShop(id);
   }
 
   function updateBadge(explicitCount) {
     const query = hiddenInput.value.trim();
     const badge = searchButton.querySelector('.compact-search-count');
     searchButton.classList.toggle('has-query', Boolean(query));
-    if (!query) {
-      badge.textContent = '0';
-      return;
-    }
-    const count = Number.isFinite(explicitCount)
-      ? explicitCount
-      : document.querySelectorAll('#shopList [data-shop-id]').length;
+    const count = query ? explicitCount ?? window.CoffeeMapData.getResults().length : 0;
     badge.textContent = count > 99 ? '99+' : String(count);
   }
 
   function highlight(text, query) {
-    const safeText = escapeHtml(String(text || ''));
+    const value = String(text || '');
     const words = query.trim().split(/\s+/).filter(Boolean).sort((a, b) => b.length - a.length);
-    if (!words.length) return safeText;
+    if (!words.length) return escapeHtml(value);
     const pattern = words.map(escapeRegExp).join('|');
-    return safeText.replace(new RegExp(`(${pattern})`, 'ig'), '<mark class="search-highlight">$1</mark>');
+    return value.split(new RegExp(`(${pattern})`, 'ig')).map((part, index) => (
+      index % 2 ? `<mark class="search-highlight">${escapeHtml(part)}</mark>` : escapeHtml(part)
+    )).join('');
   }
 
   function escapeHtml(value) {
@@ -206,7 +175,4 @@
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  function cssEscape(value) {
-    return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, '\\$&');
-  }
 })();

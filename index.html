@@ -42,6 +42,7 @@
             <span data-country-label>Coffee Shops</span>
             <span class="city-chevron" aria-hidden="true"><svg class="material-symbol" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg></span>
           </button>
+          <h1 id="savedTitle" class="saved-title" hidden>收藏</h1>
           <script>
             (() => {
               try {
@@ -55,7 +56,7 @@
                 document.querySelector('[data-country-label]').textContent = String(location.country).trim();
                 document.documentElement.dataset.city = city.toLowerCase().replace(/\s+/g, '-');
                 document.documentElement.dataset.country = String(location.country_code).trim().toLowerCase();
-                document.title = String(location.country).trim() + ' · Coffee Shops';
+                document.title = String(location.country).trim() + ' · ' + document.querySelector('meta[name="apple-mobile-web-app-title"]').content;
               } catch (_) {}
             })();
           </script>
@@ -82,7 +83,7 @@
       <aside id="listPanel" class="list-panel">
         <div class="list-handle"></div>
         <div class="list-head">
-          <div><p class="list-kicker">当前结果</p><h2><span id="resultCount">—</span> 家咖啡店</h2></div>
+          <div><p class="list-kicker" id="listKicker">当前结果</p><p class="list-kicker" id="savedSummary" hidden>共收藏 <span id="savedCount">0</span> 家</p><h2><span id="resultCount">—</span> 家咖啡店</h2></div>
           <button id="fitButton" class="text-button">显示全部</button>
         </div>
         <div id="shopList" class="shop-list"><div class="empty-state">正在从云端加载…</div></div>
@@ -186,9 +187,9 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
-  <script src="./location-catalog.js?v=39"></script>
-  <script src="./map-config.js?v=39"></script>
-  <script src="./app.js?v=39"></script>
-  <script src="./admin-core.js?v=39"></script>
+  <script src="./location-catalog.js?v=40"></script>
+  <script src="./map-config.js?v=40"></script>
+  <script src="./app.js?v=40"></script>
+  <script src="./admin-core.js?v=40"></script>
 </body>
 </html>

@@ -56,7 +56,7 @@ function startup(order, changedHeader = false, count = 2, changedViewport = fals
     window: { maplibregl: true }, maplibregl: {
       Map: MapStub, NavigationControl: class {}, AttributionControl: class {}, LngLatBounds: Bounds
     },
-    map: null, filtered: [], lastDataFitKey: '', DEFAULT_CENTER: [114.1588, 22.2857],
+    map: null, activeView: 'map', filtered: [], lastDataFitKey: '', DEFAULT_CENTER: [114.1588, 22.2857],
     els: { topbar: { getBoundingClientRect: () => ({ bottom }) } },
     installMapContextLayers() {}
   });
@@ -86,7 +86,7 @@ async function citySwitch(cacheKind) {
       stop: () => calls.push('stop'),
       easeTo: () => calls.push('easeTo')
     },
-    activeRegion: 'x', activeDistrict: 'x', selectedId: 'x', shops: ['old'], filtered: ['old'],
+    activeView: 'map', citySearch: 'query', activeRegion: 'x', activeDistrict: 'x', selectedId: 'x', shops: ['old'], filtered: ['old'],
     els: { search: { value: 'query' }, clearSearch: { classList: { remove() {} } }, detailSheet: {}, districtSheet: {} },
     window: { CoffeeMapLocationCatalog: require('../location-catalog.js'), CoffeeMapCities: {
       activeCity: 'Tokyo', activeCountryCode: 'JP',

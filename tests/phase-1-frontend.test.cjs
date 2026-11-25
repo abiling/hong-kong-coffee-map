@@ -38,15 +38,59 @@ function installMock({ scenario, cacheKey }) {
     ...cities,
     ...[null, '', ' ', 'garbage', 91].map((latitude, i) => ({ ...cities[1], id: 'invalid-' + i, latitude }))
   ];
+  const v40 = ['navigation-v40', 'favorites-v40', 'sync-v40', 'webgl-v40'].includes(scenario);
+  const camera = [];
+  if (v40) {
+    class MapStub {
+      constructor() {
+        if (scenario === 'webgl-v40') throw new Error('WebGL initialization failed');
+      }
+      addControl() {}
+      on(type, fn) { if (type === 'load') requestAnimationFrame(fn); }
+      getLayer() { return true; }
+      getContainer() { return { clientWidth: 390, clientHeight: 844 }; }
+      isMoving() { return false; }
+      flyTo(options) { camera.push(['fly', options]); }
+      fitBounds(bounds) { camera.push(['fit', bounds.points]); }
+      easeTo(options) { camera.push(['ease', options]); }
+      stop() { camera.push(['stop']); }
+    }
+    class Marker {
+      constructor({ element }) { this.element = element; }
+      setLngLat() { return this; }
+      addTo() { return this; }
+      getElement() { return this.element; }
+      remove() {}
+    }
+    class Bounds {
+      constructor() { this.points = []; }
+      extend(point) { this.points.push(point); }
+      getSouthWest() { return { lng: this.points[0][0], lat: this.points[0][1] }; }
+      getNorthEast() { return this.getSouthWest(); }
+    }
+    window.maplibregl = { Map: MapStub, Marker, LngLatBounds: Bounds, NavigationControl: class {}, AttributionControl: class {} };
+    // Give cross-city shops identical names and addresses to expose text-based selection.
+    records = [
+      ...cities.map(shop => ({ ...shop, favorite: shop.id !== 'bj', name: 'Shared Coffee', address: 'Same address' })),
+      { ...cities[0], id: 'hk-other', name: 'Other Coffee', region: '九龙', favorite: false },
+      { ...cities[1], id: 'inactive', active: false, favorite: true },
+      { ...cities[1], id: 'invalid', latitude: null, favorite: true }
+    ];
+  }
   const requests = [];
   const pendingLists = [];
+  const pendingFavorites = [];
   const list = shops => new Response(JSON.stringify({ ok: true, shops }));
   const reply = payload => new Response(JSON.stringify(payload));
   localStorage.setItem('hk-coffee-admin-key-v2', 'phase-1-test-only');
   localStorage.setItem('coffee-map-country-city-v1:CN', 'Beijing');
-  if (scenario !== 'empty') {
-    localStorage.setItem('coffee-map-active-country-v1', 'CN');
-    localStorage.setItem('coffee-map-active-city-v1', 'Beijing');
+  if (scenario !== 'empty' && (!v40 || !localStorage.getItem('coffee-map-active-city-v1'))) {
+    localStorage.setItem('coffee-map-active-country-v1', v40 ? 'HK' : 'CN');
+    localStorage.setItem('coffee-map-active-city-v1', v40 ? 'Hong Kong' : 'Beijing');
+  }
+  if (scenario === 'sync-v40') {
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    AbortSignal.timeout = () => timeout(1000);
   }
   if (scenario === 'migration') {
     localStorage.setItem('coffee-map-all-data-v3', JSON.stringify({
@@ -61,7 +105,7 @@ function installMock({ scenario, cacheKey }) {
     if (!String(url).startsWith('https://script.google.com/')) throw new Error('Unexpected network call');
     if (options?.method !== 'POST') {
       if (new URL(url).searchParams.get('action') !== 'list') throw new Error('Unexpected list request');
-      return new Promise(resolve => pendingLists.push({ resolve, snapshot: records.slice() }));
+      return new Promise((resolve, reject) => pendingLists.push({ resolve, reject, snapshot: records.slice() }));
     }
     const { action, adminKey, data } = JSON.parse(options.body);
     if (adminKey !== 'phase-1-test-only') throw new Error('Unexpected admin key');
@@ -82,6 +126,17 @@ function installMock({ scenario, cacheKey }) {
       records.push(shop);
       return reply({ ok: true, shop });
     }
+    if (action === 'setFavorite' && v40) {
+      return new Promise((resolve, reject) => {
+        const write = { data, resolve, reject, signal: options.signal };
+        pendingFavorites.push(write);
+        options.signal?.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+      });
+    }
+    if (action === 'archive') {
+      records = records.filter(record => record.id !== data.id);
+      return reply({ ok: true });
+    }
     if (action === 'update' || action === 'setFavorite') {
       const shop = { ...records.find(record => record.id === data.id), ...data };
       records = records.map(record => record.id === data.id ? shop : record);
@@ -90,10 +145,22 @@ function installMock({ scenario, cacheKey }) {
     throw new Error('Unexpected action ' + action);
   };
   window.phase1 = {
-    cacheKey, cities, google, paris, shanghai, requests, pendingLists,
-    completeList() {
-      const { resolve, snapshot } = pendingLists.shift();
-      resolve(list(snapshot));
+    cacheKey, cities, google, paris, shanghai, requests, pendingLists, pendingFavorites, camera,
+    addRecord(shop) { records.push(shop); },
+    completeList(ok = true) {
+      const { resolve, reject, snapshot } = pendingLists.shift();
+      if (ok) resolve(list(snapshot));
+      else reject(new TypeError('Connection lost reading list'));
+    },
+    completeFavorite(outcome = 'success') {
+      const { data, resolve, reject } = pendingFavorites.shift();
+      if (outcome === 'timeout') return;
+      if (outcome === 'failure') return resolve(reply({ ok: false, error: 'Mock rejected write' }));
+      if (outcome === 'network-error-no-write') return reject(new TypeError('Connection lost'));
+      const shop = { ...records.find(record => record.id === data.id), ...data };
+      records = records.map(record => record.id === data.id ? shop : record);
+      if (outcome === 'network-error') return reject(new TypeError('Connection lost'));
+      if (outcome === 'success') resolve(reply({ ok: true, shop }));
     }
   };
 }
@@ -241,10 +308,221 @@ async function exercise(scenario) {
   check(catalog.activeCity === 'Paris' && Boolean(shopCard('saved-Paris')), 'France could not be selected immediately');
 }
 
+async function exerciseV40(scenario) {
+  const { cacheKey, cities, requests, pendingLists, pendingFavorites, camera, addRecord, completeList, completeFavorite } = window.phase1;
+  const catalog = window.CoffeeMapCities;
+  const $ = selector => document.querySelector(selector);
+  const click = selector => $(selector).click();
+  const check = (condition, message) => { if (!condition) throw new Error(message); };
+  const until = async (predicate, message) => {
+    const limit = Date.now() + 4000;
+    while (Date.now() < limit) {
+      if (predicate()) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error(message);
+  };
+  const card = id => $('#shopList [data-shop-id="' + id + '"]');
+  const count = () => Number($('#resultCount').textContent);
+  const country = code => $('[data-country-code="' + code + '"].country-option');
+  const openCountry = () => click('#cityButton');
+  const countryOpen = () => $('#countrySheet').getAttribute('aria-hidden') === 'false';
+  const selected = () => $('#detailSheet').dataset.shopId;
+  const pressed = () => $('#favoriteButton').getAttribute('aria-pressed');
+  const nextData = () => new Promise(resolve => window.addEventListener('coffee-map:data-updated', resolve, { once: true }));
+  const cached = id => JSON.parse(localStorage.getItem(cacheKey)).shops.find(shop => shop.id === id);
+  const type = (input, text) => {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await until(() => pendingLists.length === 1, 'Initial list request missing');
+  completeList();
+  await until(() => card('hk') && $('.compact-search-button'), 'City list or search did not initialize');
+  await new Promise(requestAnimationFrame);
+
+  if (scenario === 'navigation-v40') {
+    let changes = 0;
+    window.addEventListener('coffee-map:city-change', () => changes++);
+    openCountry();
+    check(!country('JP').hasAttribute('aria-expanded'), 'Single city received a chevron');
+    country('JP').click();
+    check(!countryOpen() && catalog.activeCity === 'Tokyo' && changes === 1, 'Single city did not open directly');
+    openCountry();
+    const before = camera.length;
+    check(country('CN').querySelector('use').getAttribute('href') === '#ms-expand-more', 'Multi-city chevron missing');
+    country('CN').click();
+    check(country('CN').getAttribute('aria-expanded') === 'true' && !$('#country-cities-CN').hidden, 'Country did not expand');
+    country('CN').click();
+    check($('#country-cities-CN').hidden && countryOpen(), 'Country toggle did not collapse the list');
+    check(changes === 1 && camera.length === before && pendingLists.length === 0, 'Accordion changed locations, camera or data');
+    country('CN').click();
+    click(`[data-location-key="CN::Xi'an"]`);
+    check(!countryOpen() && catalog.activeCity === "Xi'an" && card('xa'), 'City row did not switch');
+    openCountry();
+    check(country('CN').getAttribute('aria-expanded') === 'true', 'Active multi-city country did not reopen');
+    check($(`[data-location-key="CN::Xi'an"] use`).getAttribute('href') === '#ms-check', 'Selected city checkmark missing');
+    click('[data-close-country]');
+    click('#districtButton');
+    click('[data-location-city="Beijing"]');
+    check(catalog.activeCity === 'Beijing' && card('bj'), 'Cities & Areas quick switch failed');
+    click('#refreshButton');
+    await until(() => pendingLists.length === 1, 'Manual refresh missing');
+    completeList();
+    addRecord({ ...cities[1], id: 'osaka', city: 'Osaka' });
+    await until(() => $('#cloudMeta').textContent.includes('更新于'), 'Refresh failed');
+    click('#refreshButton');
+    await until(() => pendingLists.length === 1, 'Second refresh missing');
+    completeList();
+    await until(() => catalog.getCity('Osaka', 'JP'), 'New city not added dynamically');
+    openCountry();
+    country('JP').click();
+    check(countryOpen() && catalog.activeCity === 'Beijing' && $('#country-cities-JP button').dataset.locationKey,
+      'New multi-city country switched without a city choice');
+    click('[data-location-key="JP::Osaka"]');
+    check(!countryOpen() && catalog.activeCity === 'Osaka' && card('osaka'), 'New city selection did not switch');
+    return;
+  }
+
+  if (scenario === 'webgl-v40') {
+    check($('#map .map-error')?.textContent.includes('地图暂不可用') && $('#locateButton').disabled, 'WebGL error state missing');
+    click('[data-view="list"]');
+    type($('#searchInput'), 'other');
+    check(count() === 1 && card('hk-other'), 'List search stopped after WebGL failure');
+    click('[data-view="saved"]');
+    check(count() === 3 && card('jp') && card('xa'), 'Global favorites stopped after WebGL failure');
+    card('xa').click();
+    check(selected() === 'xa' && !$('#appleMapsButton').hidden, 'Detail stopped after WebGL failure');
+    click('#favoriteButton');
+    check(!card('xa') && pressed() === 'false', 'Favorite toggle stopped after WebGL failure');
+    completeFavorite();
+    await until(() => !cached('xa').favorite, 'Write not cached after WebGL failure');
+    return;
+  }
+
+  if (scenario === 'favorites-v40') {
+    click('#districtButton');
+    click('[data-location-region="港岛"]');
+    type($('#searchInput'), 'Shared');
+    await new Promise(requestAnimationFrame);
+    const before = JSON.stringify(camera);
+    click('[data-view="saved"]');
+    check($('#savedTitle').textContent === '收藏' && getComputedStyle($('#cityButton')).display === 'none'
+      && getComputedStyle($('#regionFilters')).display === 'none', 'Saved header did not hide location controls');
+    check(count() === 3 && Number($('#savedCount').textContent) === 3 && !card('inactive') && !card('invalid'), 'Wrong total or invalid favorites shown');
+    check(document.querySelectorAll('.saved-country').length === 3 && document.querySelectorAll('.saved-city').length === 3, 'Wrong location grouping');
+    click('.compact-search-button');
+    type($('.search-mode-input'), "Xi'an");
+    await until(() => $('[data-search-shop-id="xa"]'), 'Mobile global search failed');
+    check(count() === 1 && Number($('#savedCount').textContent) === 3 && $('.search-mode-status').textContent === '1 个匹配结果', 'Search modified the total');
+    click('[data-search-shop-id="xa"]');
+    check(selected() === 'xa' && !$('#appleMapsButton').hidden && $('#googleMapsButton').hidden, 'Cross-city search opened the wrong shop/provider');
+    check(catalog.activeCity === 'Hong Kong' && JSON.stringify(camera) === before, 'Cross-city opening changed the camera or city');
+    click('#editSelectedButton');
+    const form = $('#editPlaceForm');
+    check(form.dataset.shopId === 'xa' && form.elements.city.value === "Xi'an", 'Editor resolved identical name/address to the wrong ID');
+    form.elements.name.value = 'Edited Xi’an';
+    form.requestSubmit();
+    await until(() => !$('#editPlaceDialog').open && card('xa')?.textContent.includes('Edited Xi’an'), 'Cross-city edit did not refresh the global card');
+    check(requests.at(-1).data.id === 'xa' && cached('hk').name === 'Shared Coffee', 'Edit affected another ID');
+    window.confirm = () => true;
+    click('#deleteSelectedButton');
+    await until(() => !cached('xa') && !card('xa'), 'Cross-city archive did not remove the shop');
+    check(requests.at(-1).data.id === 'xa' && selected() == null && Number($('#savedCount').textContent) === 2, 'Delete targeted the wrong ID or left stale detail/count');
+    click('[data-view="list"]');
+    check($('#searchInput').value === 'Shared' && card('hk') && !card('hk-other'), 'Saved search leaked into city search');
+    type($('#searchInput'), '');
+    check(!card('hk-other'), 'City region filter was lost');
+    click('[data-view="map"]');
+    check(JSON.stringify(camera) === before && catalog.activeCity === 'Hong Kong', 'Return to map moved the camera');
+    check(pendingLists.length === 0, 'Entering or searching favorites fetched a list');
+    return;
+  }
+
+  click('[data-view="saved"]');
+  card('jp').click();
+  const start = performance.now();
+  click('#favoriteButton');
+  check(pressed() === 'false' && $('#favoriteButtonLabel').textContent === '收藏'
+    && $('#favoriteButton use').getAttribute('href') === '#ms-bookmark'
+    && !card('jp') && performance.now() - start < 100, 'Slow write blocked immediate visible state');
+  click('#favoriteButton');
+  check(card('jp') && pressed() === 'true' && pendingFavorites.length === 1, 'Repeated click did not queue the latest intent');
+  completeFavorite();
+  await until(() => pendingFavorites.length === 1 && pendingFavorites[0].data.favorite, 'Opposite writes were not serialized');
+  click('#refreshButton');
+  await until(() => pendingLists.length === 1, 'Missing stale list request');
+  check(!pendingLists[0].snapshot.find(shop => shop.id === 'jp').favorite, 'Test read is not stale');
+  const latestWrite = nextData();
+  completeFavorite();
+  await latestWrite;
+  const lateRead = nextData();
+  completeList();
+  await lateRead;
+  await until(() => $('#menuSheet').getAttribute('aria-hidden') === 'true', 'Late read did not complete');
+  check(cached('jp').favorite && card('jp') && pressed() === 'true', 'Late list overrode the confirmed favorite');
+
+  click('#favoriteButton');
+  click('#refreshButton');
+  await until(() => pendingLists.length === 1, 'Missing pending list request');
+  const pendingRead = nextData();
+  completeList();
+  await pendingRead;
+  check(!card('jp') && pressed() === 'false', 'Background list overrode an optimistic state');
+  click('[data-close-sheet]');
+  catalog.setActiveCity('Beijing', 'CN');
+  click('[data-view="list"]');
+  completeFavorite('failure');
+  await until(() => $('#toast').textContent.includes('Mock rejected write'), 'Definite rejection had no error or rollback: ' + JSON.stringify(requests));
+  click('[data-view="saved"]');
+  check(card('jp') && cached('jp').favorite && catalog.activeCity === 'Beijing', 'Failed write did not restore state after city/view switch');
+
+  card('jp').click();
+  click('#favoriteButton');
+  completeFavorite('network-error');
+  await until(() => pendingLists.length === 1, 'Uncertain network result was not re-read');
+  check(!card('jp') && pressed() === 'false', 'Uncertain write rolled back before verification');
+  completeList();
+  await until(() => !cached('jp').favorite, 'Committed write was not confirmed');
+
+  card('hk').click();
+  click('#favoriteButton');
+  const timedOut = pendingFavorites[0];
+  await until(() => timedOut.signal.aborted && pendingLists.length === 1, 'Timed-out POST was not re-read');
+  check(!card('hk') && pressed() === 'false', 'Timeout rolled back before verifying');
+  completeFavorite('timeout');
+  completeList();
+  await until(() => card('hk') && pressed() === 'true', 'Timeout did not reconcile to the verified server value');
+  check($('#toast').textContent.includes('云端未确认'), 'Missing timeout status');
+
+  click('#favoriteButton');
+  completeFavorite('network-error-no-write');
+  await until(() => pendingLists.length === 1, 'Verification list missing');
+  completeList(false);
+  await until(() => $('#syncIndicator').textContent === '收藏待确认', 'Failed confirmation was not visible');
+  check(!card('hk') && cached('hk').favorite, 'Failed read discarded the optimistic value or overwrote the confirmed cache');
+  click('#refreshButton');
+  await until(() => pendingLists.length === 1, 'Manual retry missing');
+  completeList();
+  await until(() => card('hk') && pressed() === 'true', 'Manual retry did not reconcile the favorite');
+
+  for (const id of ['hk', 'xa']) {
+    card(id).click();
+    click('#favoriteButton');
+    completeFavorite();
+    await until(() => !cached(id).favorite, 'Removal did not sync for ' + id);
+  }
+  check(count() === 0 && Number($('#savedCount').textContent) === 0
+    && $('#shopList .empty-state').textContent.includes('还没有收藏'), 'Missing empty favorites state');
+}
+
 for (const [scenario, title] of Object.entries({
   migration: 'v3 migration, four existing cities, active edit, and Tokyo → Shanghai',
   stale: 'Beijing → Paris, parse validation, transient draft, and concurrent save/refresh',
-  empty: 'cold start, empty catalog, and first save without a cache'
+  empty: 'cold start, empty catalog, and first save without a cache',
+  'navigation-v40': 'single-city navigation, accordion, dynamic city addition, and quick switch',
+  'favorites-v40': 'global grouping/search, cross-city identity and provider, edit/archive, and map return',
+  'sync-v40': 'optimistic feedback, serial writes, late reads, explicit failure, unknown results and timeout',
+  'webgl-v40': 'list, search, details and favorites survive a throwing WebGL constructor'
 })) {
   test('API v7 mock contract in Chromium: ' + title, {
     skip: !browserAvailable && 'Playwright and Chromium required (set CHROMIUM_BIN if needed)'
@@ -265,7 +543,12 @@ for (const [scenario, title] of Object.entries({
         return route.fulfill({ path: join(root, name) });
       });
       await page.goto('http://coffee-map.test/', { timeout: 10_000 });
-      await page.evaluate(exercise, scenario);
+      await page.evaluate(scenario.endsWith('-v40') ? exerciseV40 : exercise, scenario);
+      if (scenario === 'navigation-v40') {
+        await page.reload();
+        assert.equal(await page.evaluate(() => window.CoffeeMapCities.activeCity), 'Osaka');
+        assert.equal(await page.locator('#shopList [data-shop-id="osaka"]').count(), 1);
+      }
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();
@@ -286,10 +569,10 @@ test('PWA shell versions match the page and cache bootstrap', () => {
   const html = source('index.html');
   const worker = source('sw.js');
   assert.ok(html.includes(ALL_DATA_CACHE_KEY));
-  assert.match(worker, /coffee-map-v39-/);
-  assert.match(source('app.js'), /register\('\.\/sw\.js\?v=39'\)/);
+  assert.match(worker, /coffee-map-v40/);
+  assert.match(source('app.js'), /register\('\.\/sw\.js\?v=40'\)/);
   for (const asset of ['location-catalog.js', 'map-config.js', 'multicity.js', 'app.js', 'admin-core.js']) {
-    const path = './' + asset + '?v=39';
+    const path = './' + asset + '?v=40';
     assert.ok(worker.includes(path));
     assert.ok((asset === 'multicity.js' ? source('map-config.js') : html).includes(path));
   }

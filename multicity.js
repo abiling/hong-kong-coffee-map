@@ -7,7 +7,7 @@
   const CITY_STORAGE_KEY = 'coffee-map-active-city-v1';
   const COUNTRY_STORAGE_KEY = 'coffee-map-active-country-v1';
   const COUNTRY_CITY_STORAGE_PREFIX = 'coffee-map-country-city-v1:';
-  const API_MARKER = 'script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
+  const API_MARKER = 'https://script.google.com/macros/s/AKfycby0EnuIMDygemCzD522FkMgdYylRcr-UZef_KZUuiboBa5kT73PpDXrdHK8nqoAlsgxVg/exec';
   const PROVIDERS = Object.freeze({
     google: Object.freeze({ field: 'google_maps', label: 'Google Maps', placeholder: 'https://maps.app.goo.gl/…' }),
     apple: Object.freeze({ field: 'apple_maps', label: 'Apple Maps', placeholder: 'https://maps.apple.com/place?…' })
@@ -44,6 +44,7 @@
   let activeConfig = catalog.locations[activeLocationKey] || provisionalLocation();
   let activeCity = activeConfig.city;
   let activeCountryCode = activeConfig.countryCode;
+  const expandedCountries = new Set();
 
   window.CoffeeMapCities = Object.freeze({
     get activeCity() { return activeCity; },
@@ -65,7 +66,6 @@
     normalizeLocationFields,
     renderRegionRail,
     setActiveCity,
-    setActiveCountry,
     setActiveLocation,
     syncForm: syncFormLocation,
     updateCatalog,
@@ -222,14 +222,16 @@
     const cityAwareFetch = async (...args) => {
       const response = await nativeFetch(...args);
       const requestUrl = String(args[0]?.url || args[0] || '');
-      if (!requestUrl.includes(API_MARKER)) return response;
       let requestedCity = '';
       let requestedCountryCode = '';
       try {
         const url = new URL(requestUrl, window.location.href);
+        if (url.origin + url.pathname !== API_MARKER) return response;
         requestedCity = url.searchParams.get('city') || '';
         requestedCountryCode = (url.searchParams.get('country_code') || '').toUpperCase();
-      } catch (_) {}
+      } catch (_) {
+        return response;
+      }
       try {
         const payload = await response.clone().json();
         if (Array.isArray(payload.shops)) {
@@ -286,14 +288,6 @@
     return location ? setActiveLocation(location.key) : false;
   }
 
-  function setActiveCountry(countryCode) {
-    const country = catalog.countries[String(countryCode || '').toUpperCase()];
-    if (!country?.locationKeys.length) return false;
-    const rememberedCity = localStorage.getItem(COUNTRY_CITY_STORAGE_PREFIX + country.code);
-    const targetKey = Catalog.preferredLocationKey(catalog, country.code, rememberedCity);
-    return setActiveLocation(targetKey);
-  }
-
   function citiesForCountry(countryCode = activeCountryCode) {
     const country = catalog.countries[String(countryCode || '').toUpperCase()];
     return country ? country.locationKeys.map(key => catalog.locations[key].city) : [];
@@ -318,13 +312,27 @@
     document.body.appendChild(sheet);
     renderCountryList();
     syncCitySelector();
-    button.addEventListener('click', () => openSheet(sheet));
+    button.addEventListener('click', () => {
+      expandedCountries.clear();
+      if (catalog.countries[activeCountryCode]?.locationKeys.length > 1) expandedCountries.add(activeCountryCode);
+      renderCountryList();
+      syncCitySelector();
+      openSheet(sheet);
+    });
     sheet.querySelectorAll('[data-close-country]').forEach(node => node.addEventListener('click', () => closeSheet(sheet)));
     sheet.querySelector('#countryList')?.addEventListener('click', event => {
       const cityOption = event.target.closest('[data-location-key]');
       if (cityOption) return setActiveLocation(cityOption.dataset.locationKey);
       const countryOption = event.target.closest('[data-country-code]');
-      if (countryOption) setActiveCountry(countryOption.dataset.countryCode);
+      if (!countryOption) return;
+      const code = countryOption.dataset.countryCode;
+      const { locationKeys } = catalog.countries[code];
+      if (locationKeys.length === 1) return setActiveLocation(locationKeys[0]);
+
+      const expanded = !expandedCountries.delete(code);
+      if (expanded) expandedCountries.add(code);
+      countryOption.setAttribute('aria-expanded', String(expanded));
+      document.getElementById(countryOption.getAttribute('aria-controls')).hidden = !expanded;
     });
   }
 
@@ -333,13 +341,18 @@
     if (!list) return;
     list.innerHTML = catalog.countryCodes.map(code => {
       const country = catalog.countries[code];
-      const cityRows = country.locationKeys.length > 1
-        ? `<div class="country-city-list">${country.locationKeys.map(key => {
+      const multiple = country.locationKeys.length > 1;
+      const expanded = expandedCountries.has(code);
+      const listId = `country-cities-${code}`;
+      const cityRows = multiple
+        ? `<div class="country-city-list" id="${listId}"${expanded ? '' : ' hidden'}>${country.locationKeys.map(key => {
           const location = catalog.locations[key];
           return `<button class="city-option country-city-option" type="button" data-location-key="${escapeHtml(key)}"><span><strong>${escapeHtml(location.label)}</strong>${location.localLabel ? `<small>${escapeHtml(location.localLabel)}</small>` : ''}</span><b aria-hidden="true"></b></button>`;
         }).join('')}</div>`
         : '';
-      return `<section class="country-option-group"><button class="city-option country-option" type="button" data-country-code="${escapeHtml(code)}"><span><strong>${escapeHtml(country.label)}</strong><small>${escapeHtml(country.localLabel || code)}</small></span><b aria-hidden="true"></b></button>${cityRows}</section>`;
+      const controls = multiple ? ` aria-expanded="${expanded}" aria-controls="${listId}"` : '';
+      const chevron = multiple ? '<svg class="material-symbol country-chevron" viewBox="0 0 960 960"><use href="#ms-expand-more"/></svg>' : '';
+      return `<section class="country-option-group"><button class="city-option country-option" type="button" data-country-code="${escapeHtml(code)}"${controls}><span><strong>${escapeHtml(country.label)}</strong><small>${escapeHtml(country.localLabel || code)}</small></span><b aria-hidden="true">${chevron}</b></button>${cityRows}</section>`;
     }).join('');
   }
 
@@ -350,8 +363,10 @@
     document.querySelectorAll('#countryList [data-country-code]').forEach(option => {
       const selected = option.dataset.countryCode === activeCountryCode;
       option.classList.toggle('active', selected);
-      option.setAttribute('aria-current', selected ? 'true' : 'false');
-      setCheckmark(option, selected && (country?.locationKeys.length || 0) === 1);
+      if (!option.hasAttribute('aria-expanded')) {
+        option.setAttribute('aria-current', String(selected));
+        setCheckmark(option, selected);
+      }
     });
     document.querySelectorAll('#countryList [data-location-key]').forEach(option => {
       const selected = option.dataset.locationKey === activeLocationKey;
@@ -520,8 +535,8 @@
     document.documentElement.dataset.city = activeCity.toLowerCase().replace(/\s+/g, '-');
     document.documentElement.dataset.country = activeCountryCode.toLowerCase();
     const countryLabel = catalog.countries[activeCountryCode]?.label || activeConfig.country || 'Coffee Shops';
-    document.title = `${countryLabel} · Coffee Shops`;
-    document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', 'Coffee Shops');
+    const appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content || 'Coffee Shops';
+    document.title = countryLabel === appTitle ? appTitle : `${countryLabel} · ${appTitle}`;
   }
 
   function openSheet(sheet) {

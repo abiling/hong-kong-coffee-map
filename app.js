@@ -6,11 +6,14 @@
   const Catalog = window.CoffeeMapLocationCatalog;
   const { ALL_DATA_CACHE_KEY } = Catalog;
   const CLOUD_CACHE_TTL_MS = 15 * 60 * 1000;
+  const REQUEST_TIMEOUT_MS = 12000;
   const DEFAULT_CENTER = [114.1588, 22.2857];
 
   let shops = [], filtered = [], activeRegion = '全部', activeDistrict = '全部', activeView = 'map', selectedId = null;
   let map = null, toastTimer = null, userLocationMarker = null, lastDataFitKey = '';
+  let citySearch = '', savedSearch = '', listResults = [], cloudStatus = 'syncing';
   const markers = new Map();
+  const favoriteWrites = new Map();
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
   const els = {
@@ -29,14 +32,17 @@
     getCached: readCityCache,
     upsert: upsertCachedShop,
     remove: removeCachedShop,
-    invalidate: invalidateCityCache
+    invalidate: invalidateCityCache,
+    getShop: findCachedShop,
+    getResults: () => listResults,
+    selectShop: id => selectShop(String(id), activeView !== 'saved')
   });
 
   try { localStorage.removeItem('coffee-map-all-data-v3'); } catch (_) {}
   trackLayout();
-  initMap();
   bindEvents();
   renderAdminKeyState();
+  initMap();
   loadCloudShops({ fit: true });
 
   function trackLayout() {
@@ -106,27 +112,33 @@
   }
 
   function initMap() {
-    if (!window.maplibregl) {
-      $('#map').innerHTML = '<div class="map-error"><strong>地图未能载入</strong><span>请检查网络连接。</span></div>';
-      return;
+    try {
+      if (!window.maplibregl) throw new Error('MapLibre unavailable');
+      map = new maplibregl.Map({
+        container: 'map', style: 'https://tiles.openfreemap.org/styles/positron', center: DEFAULT_CENTER,
+        zoom: 11.25, minZoom: 9, maxZoom: 19, attributionControl: false
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+      map.on('movestart', event => {
+        if (event.originalEvent) lastDataFitKey = '';
+      });
+      map.on('load', () => {
+        installMapContextLayers();
+        // applyFilters renders DOM markers as soon as shop data arrives, including
+        // before style load. Rebuilding them here only discards identical nodes.
+        // Keep the load-time correction only when bounds or header padding changed.
+        // Otherwise an earlier cached-data fit is already the final viewport.
+        if (activeView !== 'saved' && filtered.length) fitTo(filtered, false, { skipIfSame: true });
+      });
+    } catch (error) {
+      console.warn('Map initialization failed:', error);
+      try { map?.remove(); } catch (_) {}
+      map = null;
+      document.body.classList.add('map-unavailable');
+      $('#map').innerHTML = '<div class="map-error" role="status"><strong>地图暂不可用</strong><span>你仍可使用列表、收藏和搜索。</span></div>';
+      ['#locateButton', '#fitButton', '#useMapCenter'].forEach(selector => { $(selector).disabled = true; });
     }
-    map = new maplibregl.Map({
-      container: 'map', style: 'https://tiles.openfreemap.org/styles/positron', center: DEFAULT_CENTER,
-      zoom: 11.25, minZoom: 9, maxZoom: 19, attributionControl: false
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-    map.on('movestart', event => {
-      if (event.originalEvent) lastDataFitKey = '';
-    });
-    map.on('load', () => {
-      installMapContextLayers();
-      // applyFilters renders DOM markers as soon as shop data arrives, including
-      // before style load. Rebuilding them here only discards identical nodes.
-      // Keep the load-time correction only when bounds or header padding changed.
-      // Otherwise an earlier cached-data fit is already the final viewport.
-      if (filtered.length) fitTo(filtered, false, { skipIfSame: true });
-    });
   }
 
   function activeCityName() {
@@ -183,7 +195,7 @@
     return allDataCache = null;
   }
 
-  function writeAllDataCache(payload, cachedAt = new Date().toISOString()) {
+  function writeAllDataCache(payload, cachedAt = new Date().toISOString(), { updateCatalog = true } = {}) {
     const snapshot = {
       shops: payload.shops,
       updated_at: payload.updated_at || new Date().toISOString(),
@@ -195,7 +207,7 @@
     } catch (error) {
       console.warn('Persistent cloud cache write failed:', error);
     }
-    window.CoffeeMapCities?.updateCatalog(payload.shops);
+    if (updateCatalog) window.CoffeeMapCities?.updateCatalog(payload.shops);
     window.dispatchEvent(new CustomEvent('coffee-map:data-updated'));
   }
 
@@ -227,12 +239,18 @@
     localStorage.removeItem(ALL_DATA_CACHE_KEY);
   }
 
+  function findCachedShop(id) {
+    if (id == null) return null;
+    return readAllDataCache()?.shops.find(shop => String(shop.id) === String(id) && shop.active !== false) || null;
+  }
+
   function upsertCachedShop(rawShop) {
     if (!rawShop?.id) return;
     changeCachedShop(rawShop.id, rawShop);
   }
 
   function removeCachedShop(id) {
+    if (favoriteWrites.delete(String(id))) renderSyncIndicator();
     changeCachedShop(id, null);
   }
 
@@ -256,17 +274,25 @@
   async function fetchAllCloudPayload() {
     if (cloudLoad) return cloudLoad.promise;
     const changes = new Map();
+    const favoriteChanges = new Map();
+    const awaitingRead = [...favoriteWrites].filter(([, write]) => write.awaitingRead);
     const promise = (async () => {
       const query = new URLSearchParams({ action: 'list', _: String(Date.now()) });
-      const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
+      const response = await fetch(`${API_URL}?${query}`, { cache: 'no-store', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.shops)) throw new Error(payload.error || '云端数据格式不正确');
       changes.forEach((shop, id) => applyShopChange(payload.shops, shop, id));
+      payload.shops = payload.shops.map(shop => favoriteChanges.has(String(shop.id))
+        ? { ...shop, favorite: favoriteChanges.get(String(shop.id)) }
+        : shop);
       const cachedAt = new Date().toISOString();
       writeAllDataCache(payload, cachedAt);
+      for (const [id, write] of awaitingRead) {
+        if (favoriteWrites.get(id) === write && write.awaitingRead) finishFavoriteRead(id, write);
+      }
       return { ...payload, cached_at: cachedAt, from_cache: false };
     })();
-    cloudLoad = { promise, changes };
+    cloudLoad = { promise, changes, favoriteChanges };
     try {
       return await promise;
     } finally {
@@ -281,8 +307,7 @@
   }
 
   function applyCloudPayload(payload, { fit = false } = {}) {
-    shops = payload.shops.map(normalizeShop)
-      .filter(shop => shop.active && shop.id && Number.isFinite(shop.latitude) && Number.isFinite(shop.longitude));
+    shops = payload.shops.map(normalizeShop).filter(isValidShop);
     const meta = payload.from_cache
       ? `${shops.length} 家 · 本地缓存`
       : `${shops.length} 家 · ${formatSyncTime(payload.updated_at)}`;
@@ -290,6 +315,7 @@
     window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
     renderDistricts();
     applyFilters({ fit });
+    refreshFavoriteUI({ renderSaved: false });
   }
 
   function refreshAllInBackground(city, countryCode) {
@@ -313,7 +339,7 @@
     }
 
     setCloudState('syncing', '正在同步', '正在读取 Google Sheets');
-    if (!quiet) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
+    if (!quiet && !allDataCache) els.list.innerHTML = '<div class="empty-state">正在从云端加载…</div>';
     try {
       const payload = await getCloudPayload({ force: true, city, countryCode });
       if (activeCityName() !== city || activeCountryCode() !== countryCode) return payload;
@@ -323,10 +349,11 @@
       if (activeCityName() !== city || activeCountryCode() !== countryCode) return null;
       console.error(error);
       setCloudState('error', '云端连接失败', '请检查网络后重试');
-      const allCount = $('#allCount');
-      if (allCount) allCount.textContent = '—';
-      els.resultCount.textContent = '—';
-      els.list.innerHTML = '<div class="empty-state"><strong>无法读取云端数据</strong><br>请稍后重新同步。</div>';
+      if (!readAllDataCache()) {
+        els.allCount.textContent = '—';
+        els.resultCount.textContent = '—';
+        els.list.innerHTML = '<div class="empty-state"><strong>无法读取云端数据</strong><br>请稍后重新同步。</div>';
+      }
       showToast('云端数据读取失败');
       return null;
     }
@@ -336,7 +363,7 @@
     const location = window.CoffeeMapCities?.normalizeLocationFields(raw) || raw;
     const validCoordinates = Catalog.hasCoordinates(raw);
     return {
-      id: String(raw.id || ''), name: String(raw.name || ''), address: String(raw.address || ''),
+      id: String(raw.id ?? ''), name: String(raw.name || ''), address: String(raw.address || ''),
       city: String(location.city || ''), country: String(location.country || ''),
       country_code: String(location.country_code || ''),
       region: String(raw.region || ''), district: String(raw.district || ''),
@@ -348,18 +375,27 @@
     };
   }
 
-  async function apiPost(action, data) {
-    const adminKey = ensureAdminKey();
+  function isValidShop(shop) {
+    return shop.active && shop.id && Catalog.isCompleteLocation(shop) && Catalog.hasCoordinates(shop);
+  }
+
+  async function apiPost(action, data, { adminKey = ensureAdminKey(), signal } = {}) {
     if (!adminKey) throw new Error('已取消管理员操作');
     const response = await fetch(API_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, adminKey, data }), redirect: 'follow'
+      body: JSON.stringify({ action, adminKey, data }), redirect: 'follow', signal
     });
     const payload = await response.json();
-    if (!response.ok || !payload.ok) {
+    if (!response.ok || payload.ok !== true) {
       const message = String(payload.error || '云端操作失败');
-      if (/unauthorized/i.test(message)) { localStorage.removeItem(ADMIN_KEY_STORAGE); renderAdminKeyState(); }
-      throw new Error(/unauthorized/i.test(message) ? '管理员密钥无效，已从本机清除' : message);
+      const unauthorized = /unauthorized/i.test(message);
+      if (unauthorized && localStorage.getItem(ADMIN_KEY_STORAGE) === adminKey) {
+        localStorage.removeItem(ADMIN_KEY_STORAGE);
+        renderAdminKeyState();
+      }
+      const error = new Error(unauthorized ? '管理员密钥无效，请重新设置' : message);
+      error.definite = response.status < 500 && payload.ok === false;
+      throw error;
     }
     return payload;
   }
@@ -386,24 +422,67 @@
   }
 
   function renderList() {
-    const allCount = $('#allCount');
-    if (allCount) allCount.textContent = shops.length;
-    els.resultCount.textContent = filtered.length;
-    if (!filtered.length) { els.list.innerHTML = `<div class="empty-state">${activeView === 'saved' ? '还没有收藏咖啡店' : '没有符合当前条件的咖啡店'}</div>`; return; }
-    els.list.innerHTML = filtered.map(s => `<button class="shop-card" data-shop-id="${escapeHtml(s.id)}"><h3>${escapeHtml(s.name)}</h3><p><span class="area">${escapeHtml(s.district)}</span>${escapeHtml(s.address)}</p></button>`).join('');
-    els.list.querySelectorAll('[data-shop-id]').forEach(card => card.addEventListener('click', () => selectShop(card.dataset.shopId, true)));
+    els.allCount.textContent = shops.length;
+    const saved = activeView === 'saved';
+    const favorites = saved ? (readAllDataCache()?.shops || []).filter(favoriteFor)
+      .map(normalizeShop).filter(isValidShop) : [];
+    const query = normalize(savedSearch);
+    listResults = saved ? favorites.filter(shop => matchesSearch(shop, query, true)) : filtered;
+    els.resultCount.textContent = listResults.length;
+    $('#savedCount').textContent = favorites.length;
+
+    if (!listResults.length) {
+      const message = saved && !favorites.length ? '还没有收藏咖啡店' : '没有符合当前条件的咖啡店';
+      els.list.innerHTML = `<div class="empty-state">${message}</div>`;
+    } else {
+      els.list.innerHTML = saved ? renderSavedGroups() : listResults.map(shopCard).join('');
+    }
+    window.dispatchEvent(new Event('coffee-map:results-updated'));
+  }
+
+  function shopCard(shop) {
+    return `<button class="shop-card" type="button" data-shop-id="${escapeHtml(shop.id)}"><h3>${escapeHtml(shop.name)}</h3><p><span class="area">${escapeHtml(shop.district)}</span>${escapeHtml(shop.address)}</p></button>`;
+  }
+
+  function renderSavedGroups() {
+    const { catalog } = window.CoffeeMapCities;
+    const groups = new Map();
+    for (const shop of listResults) {
+      const key = Catalog.locationKey(shop.country_code, shop.city);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(shop);
+    }
+    return catalog.countryCodes.map(code => {
+      const country = catalog.countries[code];
+      const cities = country.locationKeys.filter(key => groups.has(key)).map(key => {
+        const city = catalog.locations[key];
+        return `<section class="saved-city"><h4>${escapeHtml(city.localLabel || city.label)}</h4>${groups.get(key).map(shopCard).join('')}</section>`;
+      });
+      return cities.length
+        ? `<section class="saved-country"><h3>${escapeHtml(country.localLabel || country.label)}</h3>${cities.join('')}</section>`
+        : '';
+    }).join('');
+  }
+
+  function matchesSearch(shop, query, global = false) {
+    if (!query) return true;
+    const fields = [shop.name, shop.address, shop.region, shop.district, shop.category, shop.notes];
+    if (global) {
+      const cities = window.CoffeeMapCities;
+      const country = cities.countries[shop.country_code];
+      const city = cities.getCity(shop.city, shop.country_code);
+      fields.push(shop.city, shop.country, shop.country_code, city?.localLabel, country?.localLabel, country?.label);
+    }
+    return fields.some(value => normalize(value).includes(query));
   }
 
   function applyFilters({ fit = false } = {}) {
-    const q = normalize(els.search.value);
-    filtered = shops.filter(s => {
-      const regionOK = activeRegion === '全部' || s.region === activeRegion;
-      const districtOK = activeDistrict === '全部' || s.district === activeDistrict;
-      const searchOK = !q || [s.name, s.address, s.region, s.district, s.category, s.notes].some(v => normalize(v).includes(q));
-      const savedOK = activeView !== 'saved' || s.favorite;
-      return regionOK && districtOK && searchOK && savedOK;
-    });
-    renderList(); if (map) renderMarkers(); if (fit) fitTo(filtered, true);
+    const query = normalize(citySearch);
+    filtered = shops.filter(shop => (activeRegion === '全部' || shop.region === activeRegion)
+      && (activeDistrict === '全部' || shop.district === activeDistrict) && matchesSearch(shop, query));
+    renderList();
+    renderMarkers();
+    if (fit) fitTo(filtered, true);
   }
 
   function fitTo(items, animate = true, { skipIfSame = false } = {}) {
@@ -426,9 +505,13 @@
   }
 
   function selectShop(id, moveMap) {
-    const shop = shops.find(s => s.id === id); if (!shop) return;
-    selectedId = id;
-    if (moveMap && map) {
+    const raw = findCachedShop(id);
+    if (!raw) return;
+    const shop = normalizeShop(raw);
+    if (!isValidShop(shop)) return;
+    selectedId = shop.id;
+    els.detailSheet.dataset.shopId = shop.id;
+    if (moveMap && map && activeView !== 'saved') {
       lastDataFitKey = '';
       map.flyTo({ center: [shop.longitude, shop.latitude], zoom: 15.6, offset: [0, -90], essential: true });
     }
@@ -441,7 +524,7 @@
     const validMapUrl = window.CoffeeMapCities?.validateMapUrl(provider, mapUrl) ?? Boolean(mapUrl);
     setMapAction($('#googleMapsButton'), provider === 'google' && validMapUrl, shop.googleMaps);
     setMapAction($('#appleMapsButton'), provider === 'apple' && validMapUrl, shop.appleMaps);
-    renderFavoriteAction(shop);
+    renderFavoriteAction(favoriteFor(shop));
     openSheet(els.detailSheet);
   }
 
@@ -523,16 +606,53 @@
       applyFilters({ fit: true });
     });
     window.addEventListener('coffee-map:city-change', switchCityView);
+    window.addEventListener('online', () => {
+      for (const [id, write] of favoriteWrites) {
+        if (write.awaitingRead) verifyFavorite(id, write);
+      }
+    });
     window.addEventListener('coffee-map:shop-updated', event => applyShopUpdate(event.detail?.shop, event.detail?.previousCity, event.detail?.previousCountryCode));
-    window.addEventListener('coffee-map:shop-removed', event => removeShopFromView(event.detail?.id, event.detail?.city, event.detail?.countryCode));
-    els.search.addEventListener('input', () => { els.clearSearch.classList.toggle('visible', Boolean(els.search.value)); applyFilters(); });
-    els.clearSearch.addEventListener('click', () => { els.search.value = ''; els.clearSearch.classList.remove('visible'); applyFilters({ fit: true }); });
+    window.addEventListener('coffee-map:shop-removed', event => removeShopFromView(event.detail?.id));
+    els.list.addEventListener('click', event => {
+      const card = event.target.closest('[data-shop-id]');
+      if (card) window.CoffeeMapData.selectShop(card.dataset.shopId);
+    });
+    els.search.addEventListener('input', () => {
+      els.clearSearch.classList.toggle('visible', Boolean(els.search.value));
+      if (activeView === 'saved') {
+        savedSearch = els.search.value;
+        renderList();
+      } else {
+        citySearch = els.search.value;
+        applyFilters();
+      }
+    });
+    els.clearSearch.addEventListener('click', () => {
+      els.search.value = '';
+      els.search.dispatchEvent(new Event('input'));
+      if (activeView !== 'saved') fitTo(filtered, true);
+    });
     $('#fitButton').addEventListener('click', () => fitTo(filtered, true));
-    $$('.nav-item').forEach(b => b.addEventListener('click', () => {
-      activeView = b.dataset.view; $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
+    $$('.nav-item').forEach(button => button.addEventListener('click', () => {
+      if (activeView === button.dataset.view) return;
+      activeView = button.dataset.view;
+      const saved = activeView === 'saved';
+      $$('.nav-item').forEach(item => item.classList.toggle('active', item === button));
       document.body.classList.toggle('list-view', activeView === 'list');
-      document.body.classList.toggle('saved-view', activeView === 'saved');
-      applyFilters(); setTimeout(() => map?.resize(), 80);
+      document.body.classList.toggle('saved-view', saved);
+      $('#cityButton').hidden = saved;
+      $('#savedTitle').hidden = !saved;
+      $('#regionFilters').hidden = saved;
+      $('#fitButton').hidden = saved;
+      $('#savedSummary').hidden = !saved;
+      $('#listKicker').hidden = saved;
+      els.search.value = saved ? savedSearch : citySearch;
+      els.search.placeholder = saved ? '搜索全部收藏' : '搜索店名、地址或地区';
+      els.clearSearch.classList.toggle('visible', Boolean(els.search.value));
+      closeSheet(els.detailSheet);
+      closeSheet(els.districtSheet);
+      closeSheet($('#countrySheet'));
+      renderList();
     }));
     $('#locateButton').addEventListener('click', locateUser);
     $('#addButton').addEventListener('click', () => { resetAddForm(); els.addDialog.showModal(); });
@@ -564,8 +684,11 @@
     activeDistrict = '全部';
     selectedId = null;
     lastDataFitKey = '';
-    els.search.value = '';
-    els.clearSearch.classList.remove('visible');
+    citySearch = '';
+    if (activeView !== 'saved') {
+      els.search.value = '';
+      els.clearSearch.classList.remove('visible');
+    }
     closeSheet(els.detailSheet);
     closeSheet(els.districtSheet);
 
@@ -587,7 +710,7 @@
   function applyShopUpdate(rawShop, previousCity, previousCountryCode) {
     if (!rawShop?.id) return;
     const currentCity = activeCityName();
-    const updated = normalizeShop(rawShop);
+    const updated = normalizeShop(findCachedShop(rawShop.id) || rawShop);
     const index = shops.findIndex(shop => shop.id === updated.id);
     const belongsToCurrentLocation = updated.active && Number.isFinite(updated.latitude) && Number.isFinite(updated.longitude)
       && updated.city === currentCity && updated.country_code === activeCountryCode();
@@ -604,11 +727,14 @@
       window.CoffeeMapCities?.renderRegionRail(shops, activeRegion);
       renderDistricts();
       applyFilters();
+    } else if (activeView === 'saved') {
+      renderList();
     }
+    if (selectedId === updated.id && els.detailSheet.classList.contains('open')) selectShop(updated.id, false);
   }
 
-  function removeShopFromView(id, city = activeCityName(), countryCode = activeCountryCode()) {
-    if (!id || city !== activeCityName() || countryCode !== activeCountryCode()) return;
+  function removeShopFromView(id) {
+    if (!id) return;
     const index = shops.findIndex(shop => shop.id === String(id));
     if (index >= 0) shops.splice(index, 1);
     if (selectedId === String(id)) {
@@ -689,40 +815,131 @@
     finally { els.savePlaceButton.disabled = false; els.savePlaceButton.textContent = '保存到云端'; }
   }
 
-  async function toggleFavorite() {
-    const current = shops.find(shop => shop.id === selectedId);
-    if (!current) return;
-    const button = $('#favoriteButton');
-    button.disabled = true;
-    try {
-      const { shop } = await apiPost('setFavorite', { id: current.id, favorite: !current.favorite });
-      const favorite = toBoolean(shop.favorite);
-      window.CoffeeMapData.upsert(shop);
-      applyShopUpdate(shop);
-      if (selectedId === String(shop.id)) {
-        renderFavoriteAction({ favorite });
-        if (activeView === 'saved' && !favorite) closeSheet(els.detailSheet);
+  function favoriteFor(shop) {
+    return favoriteWrites.get(String(shop.id))?.desired ?? toBoolean(shop.favorite);
+  }
+
+  function toggleFavorite() {
+    const shop = findCachedShop(selectedId);
+    if (!shop) return;
+    const adminKey = ensureAdminKey();
+    if (!adminKey) return;
+    const id = String(shop.id);
+    const desired = !favoriteFor(shop);
+    const pending = favoriteWrites.get(id);
+    if (pending) {
+      pending.desired = desired;
+      pending.adminKey = adminKey;
+      refreshFavoriteUI();
+      if (pending.awaitingRead) verifyFavorite(id, pending);
+      return;
+    }
+
+    const write = { desired, adminKey, attempted: desired, awaitingRead: false };
+    favoriteWrites.set(id, write);
+    refreshFavoriteUI();
+    syncFavorite(id, write);
+  }
+
+  async function syncFavorite(id, write) {
+    while (favoriteWrites.get(id) === write) {
+      const current = findCachedShop(id);
+      if (!current || write.desired === toBoolean(current.favorite)) break;
+      const favorite = write.attempted = write.desired;
+      try {
+        const { shop } = await apiPost('setFavorite', { id, favorite }, {
+          adminKey: write.adminKey, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        });
+        if (String(shop?.id) !== id || shop.favorite == null || toBoolean(shop.favorite) !== favorite) {
+          throw new Error('云端未返回可确认的收藏状态');
+        }
+        if (favoriteWrites.get(id) !== write) return;
+        commitFavorite(id, favorite);
+      } catch (error) {
+        if (favoriteWrites.get(id) !== write) return;
+        if (!error.definite) return verifyFavorite(id, write);
+        showToast(`收藏同步失败：${error.message}`);
+        if (write.desired === favorite) break;
       }
-      setCloudState('online', '云端已同步', `${shops.length} 家 · 刚刚更新`);
-      showToast(favorite ? '已加入收藏' : '已取消收藏');
-    } catch (error) {
-      showToast(error.message);
-    } finally {
-      button.disabled = false;
+    }
+    if (favoriteWrites.get(id) === write) {
+      favoriteWrites.delete(id);
+      refreshFavoriteUI();
     }
   }
 
-  function renderFavoriteAction(shop) {
+  function commitFavorite(id, favorite) {
+    const cached = readAllDataCache();
+    const shop = findCachedShop(id);
+    if (!shop) return;
+    // A list already in flight may still contain the value from before this write.
+    // Merge only the favorite field so an edit or archive can coexist with it.
+    cloudLoad?.favoriteChanges.set(id, favorite);
+    const cityShop = shops.find(item => item.id === id);
+    if (cityShop) cityShop.favorite = favorite;
+    writeAllDataCache({
+      ...cached,
+      shops: cached.shops.map(record => String(record.id) === id ? { ...record, favorite } : record)
+    }, cached.cached_at, { updateCatalog: false });
+  }
+
+  async function verifyFavorite(id, write) {
+    write.awaitingRead = false;
+    renderSyncIndicator();
+    // Wait out a read started before the write became uncertain, then read again.
+    if (cloudLoad) await cloudLoad.promise.catch(() => {});
+    if (favoriteWrites.get(id) !== write) return;
+    try {
+      const payload = await fetchAllCloudPayload();
+      if (favoriteWrites.get(id) !== write) return;
+      const current = cityPayloadFromAll(payload);
+      if (current) applyCloudPayload(current);
+      finishFavoriteRead(id, write);
+    } catch (_) {
+      if (favoriteWrites.get(id) !== write) return;
+      write.awaitingRead = true;
+      renderSyncIndicator();
+      showToast('暂时无法确认收藏状态，请重新同步');
+    }
+  }
+
+  function finishFavoriteRead(id, write) {
+    if (write.desired !== write.attempted) {
+      write.awaitingRead = false;
+      syncFavorite(id, write);
+      return;
+    }
+
+    favoriteWrites.delete(id);
+    const shop = findCachedShop(id);
+    if (!shop || toBoolean(shop.favorite) !== write.desired) showToast('云端未确认收藏更改，已显示最新状态');
+    refreshFavoriteUI();
+  }
+
+  function refreshFavoriteUI({ renderSaved = true } = {}) {
+    renderSyncIndicator();
+    if (activeView === 'saved' && renderSaved) renderList();
+    if (!els.detailSheet.classList.contains('open')) return;
+    const selected = findCachedShop(selectedId);
+    if (selected) renderFavoriteAction(favoriteFor(selected));
+    else closeSheet(els.detailSheet);
+  }
+
+  function renderFavoriteAction(favorite) {
     const button = $('#favoriteButton');
     if (!button) return;
-    button.classList.toggle('active', shop.favorite);
-    button.setAttribute('aria-pressed', String(shop.favorite));
-    button.querySelector('use')?.setAttribute('href', shop.favorite ? '#ms-bookmark-filled' : '#ms-bookmark');
-    $('#favoriteButtonLabel').textContent = shop.favorite ? '取消收藏' : '收藏';
+    button.classList.toggle('active', favorite);
+    button.setAttribute('aria-pressed', String(favorite));
+    button.querySelector('use')?.setAttribute('href', favorite ? '#ms-bookmark-filled' : '#ms-bookmark');
+    $('#favoriteButtonLabel').textContent = favorite ? '取消收藏' : '收藏';
   }
 
   function renderAdminKeyState() {
-    const has = Boolean(localStorage.getItem(ADMIN_KEY_STORAGE)); els.adminKeyInput.value = ''; els.adminKeyInput.placeholder = has ? '已保存在本机' : '未设置'; $('#clearAdminKeyButton').disabled = !has;
+    const has = Boolean(localStorage.getItem(ADMIN_KEY_STORAGE));
+    els.adminKeyInput.value = '';
+    els.adminKeyInput.placeholder = has ? '已保存在本机' : '未设置';
+    $('#clearAdminKeyButton').disabled = !has;
+    window.dispatchEvent(new Event('coffee-map:admin-key-updated'));
   }
   function resetAddForm() {
     els.addForm.reset();
@@ -732,13 +949,36 @@
     window.CoffeeMapCities?.syncForm(els.addForm, window.CoffeeMapCities.activeConfig);
     els.parseState.textContent = '粘贴具体商户链接后解析';
   }
-  function setCloudState(state, title, meta) { els.syncIndicator.className = `sync-indicator ${state}`; els.syncIndicator.textContent = state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步'; els.cloudDot.className = `cloud-dot ${state}`; els.cloudState.textContent = title; els.cloudMeta.textContent = meta; }
+  function setCloudState(state, title, meta) {
+    cloudStatus = state;
+    renderSyncIndicator();
+    els.cloudDot.className = `cloud-dot ${state}`;
+    els.cloudState.textContent = title;
+    els.cloudMeta.textContent = meta;
+  }
+  function renderSyncIndicator() {
+    const pending = favoriteWrites.size > 0;
+    const unconfirmed = [...favoriteWrites.values()].some(write => write.awaitingRead);
+    const state = unconfirmed ? 'error' : pending ? 'syncing' : cloudStatus;
+    els.syncIndicator.className = `sync-indicator ${state}`;
+    els.syncIndicator.textContent = unconfirmed ? '收藏待确认' : pending ? '收藏同步中'
+      : state === 'online' ? '已同步' : state === 'error' ? '离线' : '正在同步';
+  }
   function formatSyncTime(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? '已更新' : `更新于 ${new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}`; }
   function exportCsv() { const h = ['Name','City','Country','Country Code','District','Region','Address','Latitude','Longitude','Favorite','Category','Google Maps','Apple Maps','Source','Notes']; const r = shops.map(s => [s.name,s.city,s.country,s.country_code,s.district,s.region,s.address,s.latitude,s.longitude,s.favorite,s.category,s.googleMaps,s.appleMaps,s.source,s.notes]); download('coffee-shops.csv', '\ufeff' + [h,...r].map(x => x.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8'); }
   function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
   function download(name, content, type) { const blob = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
   function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
-  function closeSheet(el) { el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+  function closeSheet(el) {
+    if (!el) return;
+    el.classList.remove('open');
+    el.setAttribute('aria-hidden', 'true');
+    if (el === els.detailSheet) {
+      selectedId = null;
+      delete el.dataset.shopId;
+      markers.forEach(marker => marker.getElement().querySelector('.coffee-marker')?.classList.remove('selected'));
+    }
+  }
   function markPlaceLinkChanged() {
     parsedAddPlace = null;
     parseRevision += 1;
@@ -758,5 +998,5 @@
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function showToast(text) { clearTimeout(toastTimer); els.toast.textContent = text; els.toast.classList.add('show'); toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600); }
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=39').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?v=40').catch(() => {});
 })();

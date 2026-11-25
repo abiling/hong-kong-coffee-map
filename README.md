@@ -35,3 +35,21 @@ The deployed app is fully static. Temporary extraction data belongs in `tmp/`, w
 ## Security
 
 The Apps Script Web App URL is public and read-only operations are open. All write operations require the private `ADMIN_KEY`. The key is entered by the owner in the app and is stored only in that device's localStorage. Never commit the key to this repository.
+
+## Staging build
+
+Build a Cloudflare Pages Direct Upload ZIP with Python 3 from the current source tree:
+
+```sh
+python3 tools/build_staging.py \
+  --api-url 'https://your-test-api.example/exec' \
+  --output /tmp/coffee-shops-v40-staging.zip
+```
+
+Use your staging Apps Script web app's HTTPS `/exec` URL. To build from a pinned
+v40 source revision, add `--commit <full-commit-sha>`. Use `--source-dir <path>` to read
+another source directory or Git checkout. Choose a fresh output path for each run.
+The ZIP has `index.html` at its root and includes only the static runtime assets.
+The page and PWA are labeled Staging, and storage and Service Worker caches are
+isolated by staging endpoint. Enter the staging admin key in the app on the
+test device. Keep the generated ZIP and credentials out of Git.
